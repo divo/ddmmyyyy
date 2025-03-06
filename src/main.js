@@ -7,6 +7,7 @@ const state = {
   currentView: 'life', // 'life' or 'day'
   transitioning: false,
   currentDay: new Date(),
+  debugMode: false, // Debug flag for displaying grid coordinates
   dayTemplate: `# Morning Routine
 06:00 - 09:00
 
@@ -34,7 +35,7 @@ const state = {
 
 // Setup
 const scene = new THREE.Scene()
-scene.background = new THREE.Color(0xf5f5f5)
+scene.background = new THREE.Color(0x000000)
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
 camera.position.z = 5
@@ -56,7 +57,7 @@ scene.add(directionalLight)
 const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
 controls.dampingFactor = 0.05
-controls.enabled = false // Disable controls initially
+controls.enabled = false // Always disabled in life view
 
 // Life View - Grid of days
 const lifeViewGroup = new THREE.Group()
@@ -69,128 +70,360 @@ scene.add(dayViewGroup)
 
 // Create Life View
 function createLifeView() {
-  const yearsToShow = 90 // Show 90 years of life
-  const daysPerRow = 365 // Days per row (approximately 1 year)
-  const rows = Math.ceil((yearsToShow * 365) / daysPerRow)
+  // Clear existing contents if any
+  while(lifeViewGroup.children.length > 0) {
+    lifeViewGroup.remove(lifeViewGroup.children[0]);
+  }
+
+  // Clear any existing debug labels
+  clearDebugLabels();
+
+  const yearsToShow = 90; // Show 90 years of life
+  const daysPerRow = 365; // Days per row (one year per row, ignoring leap years)
+  const rows = yearsToShow;
   
-  const gridWidth = 10
-  const cellSize = gridWidth / daysPerRow
-  const gridHeight = rows * cellSize
+  // Calculate base unit size for both blocks and spacing
+  const baseUnit = 0.05; // Base unit for both block size and spacing
+  const blockSize = baseUnit; // Square blocks
+  const spacing = baseUnit; // Spacing equal to block size
   
-  // Calculate total days lived
-  const birthDate = new Date(state.currentDay)
-  birthDate.setFullYear(birthDate.getFullYear() - 35) // Assuming 30 years old
-  const daysSinceBirth = Math.floor((state.currentDay - birthDate) / (1000 * 60 * 60 * 24))
+  // Calculate grid dimensions
+  const totalUnitWidth = daysPerRow * (blockSize + spacing) - spacing;
+  const totalUnitHeight = rows * (blockSize + spacing) - spacing;
+  
+  console.log(`Grid dimensions: ${totalUnitWidth} x ${totalUnitHeight} units`);
+  
+  // Calculate the current day's position in the grid
+  const today = new Date(state.currentDay);
+  
+  // Calculate the day of year (0-indexed)
+  const startOfYear = new Date(today.getFullYear(), 0, 0);
+  const diff = today - startOfYear;
+  const oneDay = 1000 * 60 * 60 * 24;
+  const currentDayOfYear = Math.floor(diff / oneDay); // Already 0-indexed, no need for -1 adjustment
+  
+  // Calculate years since birth (assuming 35 years old, so current year is in row 35)
+  const currentAge = 35;
+  const currentYear = currentAge;
+  
+  // Calculate the current day index in our grid
+  const currentDayIndex = currentYear * daysPerRow + currentDayOfYear;
+  
+  console.log(`Current date: ${today.toDateString()}`);
+  console.log(`Day of year: ${currentDayOfYear + 1} (${currentDayOfYear} 0-indexed)`);
+  console.log(`Current year: ${currentYear} (row), Current day: ${currentDayOfYear} (column)`);
+  
+  // Calculate the position of the current day for camera targeting
+  const currentDayXPos = currentDayOfYear * (blockSize + spacing) - totalUnitWidth / 2 + blockSize / 2;
+  const currentDayYPos = -currentYear * (blockSize + spacing) + totalUnitHeight / 2 - blockSize / 2;
+  
+  // Store current day position for camera initialization
+  state.currentDayPosition = {
+    x: currentDayXPos,
+    y: currentDayYPos
+  };
   
   // Create grid of squares
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < daysPerRow; col++) {
-      const dayIndex = row * daysPerRow + col
+      const dayIndex = row * daysPerRow + col;
       
-      const geometry = new THREE.PlaneGeometry(cellSize * 0.9, cellSize * 0.9)
+      // Calculate position with spacing
+      const xPos = col * (blockSize + spacing) - totalUnitWidth / 2 + blockSize / 2;
+      const yPos = -row * (blockSize + spacing) + totalUnitHeight / 2 - blockSize / 2;
       
-      // Different materials based on past, present, future
-      let material
-      if (dayIndex < daysSinceBirth) {
+      let square; // Will hold the created square
+
+      if (dayIndex < currentDayIndex) {
         // Past day - filled white
-        material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
-      } else if (dayIndex === daysSinceBirth) {
-        // Current day - half filled
-        material = new THREE.MeshBasicMaterial({ 
+        const geometry = new THREE.PlaneGeometry(blockSize, blockSize);
+        const material = new THREE.MeshBasicMaterial({ 
+          color: 0xffffff, 
+          side: THREE.DoubleSide 
+        });
+        
+        square = new THREE.Mesh(geometry, material);
+        square.position.set(xPos, yPos, 0);
+        
+        // Add metadata
+        square.userData = {
+          dayIndex,
+          row,
+          col,
+          isCurrent: false
+        };
+        
+        lifeViewGroup.add(square);
+      } else if (dayIndex === currentDayIndex) {
+        // Current day - blue
+        const geometry = new THREE.PlaneGeometry(blockSize, blockSize);
+        const material = new THREE.MeshBasicMaterial({ 
           color: 0x4a90e2, 
           side: THREE.DoubleSide 
-        })
+        });
+        
+        square = new THREE.Mesh(geometry, material);
+        square.position.set(xPos, yPos, 0);
+        
+        // Add metadata
+        square.userData = {
+          dayIndex,
+          row,
+          col,
+          isCurrent: true,
+          clickable: true,
+          onClick: () => {
+            transitionToDay();
+          }
+        };
+        
+        lifeViewGroup.add(square);
+        
+        console.log(`Current day square position: row ${row}, column ${col}, x: ${xPos}, y: ${yPos}`);
       } else {
-        // Future day - empty (just outline)
-        material = new THREE.MeshBasicMaterial({ 
-          color: 0xe0e0e0, 
-          side: THREE.DoubleSide,
+        // Future day - just white outline
+        const outlineGeometry = new THREE.EdgesGeometry(
+          new THREE.PlaneGeometry(blockSize, blockSize)
+        );
+        const material = new THREE.LineBasicMaterial({ 
+          color: 0xffffff, 
           transparent: true,
           opacity: 0.5
-        })
+        });
+        
+        square = new THREE.LineSegments(outlineGeometry, material);
+        square.position.set(xPos, yPos, 0);
+        
+        // Add metadata
+        square.userData = {
+          dayIndex,
+          row,
+          col,
+          isCurrent: false
+        };
+        
+        lifeViewGroup.add(square);
       }
       
-      const square = new THREE.Mesh(geometry, material)
-      
-      // Position square in grid
-      const xPos = col * cellSize - gridWidth / 2 + cellSize / 2
-      const yPos = -row * cellSize + gridHeight / 2 - cellSize / 2
-      square.position.set(xPos, yPos, 0)
-      
-      // Add metadata
-      square.userData = {
-        dayIndex,
-        isCurrent: dayIndex === daysSinceBirth
+      // If debug mode is on, add row/column labels
+      if (state.debugMode && (row % 5 === 0 || col % 30 === 0 || dayIndex === currentDayIndex)) {
+        addDebugLabel(square, `${row},${col}`);
       }
-      
-      // Add click event for the current day
-      if (dayIndex === daysSinceBirth) {
-        square.userData.clickable = true
-        square.userData.onClick = () => {
-          transitionToDay()
-        }
-      }
-      
-      lifeViewGroup.add(square)
     }
   }
+  
+  // Position camera above current day
+  positionCameraAboveCurrentDay();
+  
+  // Enable pan and zoom controls for life view
+  setupLifeViewControls();
+}
+
+// Position camera above the current day
+function positionCameraAboveCurrentDay() {
+  if (!state.currentDayPosition) return;
+  
+  // Set camera position above current day
+  camera.position.set(
+    state.currentDayPosition.x,
+    state.currentDayPosition.y,
+    5 // Maintain current zoom level
+  );
+  
+  // Set controls target to current day position
+  controls.target.set(
+    state.currentDayPosition.x,
+    state.currentDayPosition.y,
+    0
+  );
+  
+  // Update life view controls pan offset to match
+  if (state.lifeViewControls) {
+    state.lifeViewControls.panOffset.x = -state.currentDayPosition.x;
+    state.lifeViewControls.panOffset.y = -state.currentDayPosition.y;
+  }
+  
+  // Update controls
+  controls.update();
+}
+
+// Setup life view controls with pan and zoom but no rotation
+function setupLifeViewControls() {
+  // Make sure controls are disabled in Life view (we'll handle our own)
+  controls.enabled = false;
+  
+  // Life view controls state - initialize with current day position
+  state.lifeViewControls = {
+    zooming: false,
+    panning: false,
+    lastMouseX: 0,
+    lastMouseY: 0,
+    zoomLevel: 1,
+    panOffset: new THREE.Vector2(
+      state.currentDayPosition ? -state.currentDayPosition.x : 0,
+      state.currentDayPosition ? -state.currentDayPosition.y : 0
+    )
+  };
+  
+  // Add event listeners for life view zooming and panning
+  renderer.domElement.addEventListener('wheel', onLifeViewZoom);
+  renderer.domElement.addEventListener('mousedown', onLifeViewPanStart);
+  renderer.domElement.addEventListener('mousemove', onLifeViewPanMove);
+  renderer.domElement.addEventListener('mouseup', onLifeViewPanEnd);
+  renderer.domElement.addEventListener('mouseleave', onLifeViewPanEnd);
+}
+
+// Zoom handler for life view
+function onLifeViewZoom(event) {
+  if (state.currentView !== 'life' || state.transitioning) return;
+  
+  event.preventDefault();
+  
+  // Calculate zoom delta - scale based on wheel movement
+  const zoomDelta = event.deltaY * -0.001;
+  
+  // Apply zoom limits
+  state.lifeViewControls.zoomLevel = Math.max(0.5, Math.min(5, state.lifeViewControls.zoomLevel + zoomDelta));
+  
+  // Update camera position for zoom
+  camera.position.z = 5 / state.lifeViewControls.zoomLevel;
+  
+  console.log(`Zoom level: ${state.lifeViewControls.zoomLevel}`);
+}
+
+// Pan start handler for life view
+function onLifeViewPanStart(event) {
+  if (state.currentView !== 'life' || state.transitioning) return;
+  
+  state.lifeViewControls.panning = true;
+  state.lifeViewControls.lastMouseX = event.clientX;
+  state.lifeViewControls.lastMouseY = event.clientY;
+}
+
+// Pan move handler for life view
+function onLifeViewPanMove(event) {
+  if (!state.lifeViewControls.panning) return;
+  
+  // Calculate mouse movement
+  const deltaX = event.clientX - state.lifeViewControls.lastMouseX;
+  const deltaY = event.clientY - state.lifeViewControls.lastMouseY;
+  
+  // Update last mouse position
+  state.lifeViewControls.lastMouseX = event.clientX;
+  state.lifeViewControls.lastMouseY = event.clientY;
+  
+  // Calculate pan amount in world units
+  const panSpeed = 0.005 / state.lifeViewControls.zoomLevel;
+  state.lifeViewControls.panOffset.x += deltaX * panSpeed;
+  state.lifeViewControls.panOffset.y -= deltaY * panSpeed;
+  
+  // Apply pan to camera
+  camera.position.x = -state.lifeViewControls.panOffset.x;
+  camera.position.y = -state.lifeViewControls.panOffset.y;
+  
+  // Update camera target
+  controls.target.set(
+    -state.lifeViewControls.panOffset.x,
+    -state.lifeViewControls.panOffset.y,
+    0
+  );
+}
+
+// Pan end handler for life view
+function onLifeViewPanEnd() {
+  state.lifeViewControls.panning = false;
 }
 
 // Create Day View
 function createDayView() {
   // Parse the day template to create blocks
-  const blocks = parseDayTemplate(state.dayTemplate)
-  
-  // Create timeline
-  const timelineHeight = 10 // Height of the full day in 3D units
-  const hourHeight = timelineHeight / 24 // Height per hour
+  const blocks = parseDayTemplate(state.dayTemplate);
   
   // Clear existing blocks first
   while(dayViewGroup.children.length > 0) {
-    dayViewGroup.remove(dayViewGroup.children[0])
+    dayViewGroup.remove(dayViewGroup.children[0]);
   }
   
-  console.log(`Creating ${blocks.length} day blocks`)
+  console.log(`Creating ${blocks.length} day blocks`);
+  
+  // Create timeline
+  const timelineHeight = 10; // Height of the full day in 3D units
+  const hourHeight = timelineHeight / 24; // Height per hour
+  
+  // Add a subtle background plane
+  const backgroundGeometry = new THREE.PlaneGeometry(5, timelineHeight + 1);
+  const backgroundMaterial = new THREE.MeshBasicMaterial({ 
+    color: 0x222222, // Darker background for day view
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.7
+  });
+  const backgroundPlane = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+  backgroundPlane.position.z = -0.1;
+  dayViewGroup.add(backgroundPlane);
   
   blocks.forEach(block => {
-    const startHour = getHourFromTimeString(block.startTime)
-    const endHour = getHourFromTimeString(block.endTime)
-    const duration = endHour - startHour
+    const startHour = getHourFromTimeString(block.startTime);
+    const endHour = getHourFromTimeString(block.endTime);
+    const duration = endHour - startHour;
     
     // Handle overnight blocks (when end time is less than start time)
-    const adjustedDuration = duration < 0 ? duration + 24 : duration
+    const adjustedDuration = duration < 0 ? duration + 24 : duration;
     
     // Create block mesh
-    const blockHeight = adjustedDuration * hourHeight
-    const geometry = new THREE.BoxGeometry(3, blockHeight, 0.1)
+    const blockHeight = adjustedDuration * hourHeight;
+    const blockWidth = 3;
+    const blockDepth = 0.1;
     
     // Generate a color based on the block type
-    const blockColor = getBlockColor(block.title)
+    const blockColor = getBlockColor(block.title);
     
-    const material = new THREE.MeshStandardMaterial({
+    // Create rounded box alternative - using group of objects for the rounded effect
+    const blockGroup = new THREE.Group();
+    
+    // Main block
+    const mainGeometry = new THREE.BoxGeometry(blockWidth, blockHeight, blockDepth);
+    const mainMaterial = new THREE.MeshStandardMaterial({
       color: blockColor,
       metalness: 0.1,
       roughness: 0.7
-    })
+    });
+    const mainBlock = new THREE.Mesh(mainGeometry, mainMaterial);
+    blockGroup.add(mainBlock);
     
-    const blockMesh = new THREE.Mesh(geometry, material)
+    // Rounded corner cylinders
+    const radius = 0.1; // 4px equivalent in 3D space
+    const cornerPositions = [
+      [-blockWidth/2 + radius, blockHeight/2 - radius, 0], // top-left
+      [blockWidth/2 - radius, blockHeight/2 - radius, 0],  // top-right
+      [-blockWidth/2 + radius, -blockHeight/2 + radius, 0], // bottom-left
+      [blockWidth/2 - radius, -blockHeight/2 + radius, 0]  // bottom-right
+    ];
+    
+    cornerPositions.forEach(pos => {
+      const cornerGeometry = new THREE.CylinderGeometry(radius, radius, blockDepth, 8);
+      cornerGeometry.rotateX(Math.PI / 2); // Rotate cylinder to align with block depth
+      const corner = new THREE.Mesh(cornerGeometry, mainMaterial);
+      corner.position.set(pos[0], pos[1], 0);
+      blockGroup.add(corner);
+    });
     
     // Position block on timeline
-    const yPos = -(startHour + adjustedDuration / 2) * hourHeight + timelineHeight / 2
-    blockMesh.position.set(0, yPos, 0)
+    const yPos = -(startHour + adjustedDuration / 2) * hourHeight + timelineHeight / 2;
+    blockGroup.position.set(0, yPos, 0);
     
     // Add block title
-    const blockTitle = createTextMesh(block.title, 0.2)
-    blockTitle.position.set(0, blockHeight / 2 - 0.3, 0.06)
-    blockMesh.add(blockTitle)
+    const blockTitle = createTextMesh(block.title, 0.2);
+    blockTitle.position.set(0, blockHeight / 2 - 0.3, blockDepth / 2 + 0.01);
+    blockGroup.add(blockTitle);
     
     // Add time label
-    const timeLabel = createTextMesh(`${block.startTime} - ${block.endTime}`, 0.15)
-    timeLabel.position.set(0, -blockHeight / 2 + 0.2, 0.06)
-    blockMesh.add(timeLabel)
+    const timeLabel = createTextMesh(`${block.startTime} - ${block.endTime}`, 0.15);
+    timeLabel.position.set(0, -blockHeight / 2 + 0.2, blockDepth / 2 + 0.01);
+    blockGroup.add(timeLabel);
     
-    dayViewGroup.add(blockMesh)
-  })
+    dayViewGroup.add(blockGroup);
+  });
   
   // Create current time indicator
   const indicatorGeometry = new THREE.PlaneGeometry(4, 0.05);
@@ -202,40 +435,74 @@ function createDayView() {
     depthTest: false // Ensures the indicator is always rendered on top
   });
   const timeIndicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
-  timeIndicator.position.z = 0.15; // Increased z-position to be in front of blocks (blocks are 0.1 deep)
+  timeIndicator.position.z = 0.15; // Increased z-position to be in front of blocks
   dayViewGroup.add(timeIndicator);
   dayViewGroup.userData.timeIndicator = timeIndicator;
   
-  // Hide initially but don't position behind
-  dayViewGroup.visible = false
-  dayViewGroup.position.z = 0 // Position at the origin instead of behind
+  // Hide initially
+  dayViewGroup.visible = false;
+  dayViewGroup.position.z = 0; // Position at the origin
+  
+  // Add hour markers
+  for (let hour = 0; hour <= 24; hour += 3) {
+    const hourMarkerGeometry = new THREE.PlaneGeometry(3.5, 0.02);
+    const hourMarkerMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0x444444, 
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide 
+    });
+    const hourMarker = new THREE.Mesh(hourMarkerGeometry, hourMarkerMaterial);
+    
+    const yPos = -hour * hourHeight + timelineHeight / 2;
+    hourMarker.position.set(0, yPos, -0.05);
+    
+    dayViewGroup.add(hourMarker);
+    
+    // Add hour text - larger size
+    const hourText = createTextMesh(formatHour(hour), 0.15);
+    hourText.position.set(-2, yPos, 0.01);
+    dayViewGroup.add(hourText);
+  }
+}
+
+// Helper function to format hour (12-hour format)
+function formatHour(hour) {
+  if (hour === 0 || hour === 24) return '12 AM';
+  if (hour === 12) return '12 PM';
+  if (hour > 12) return `${hour - 12} PM`;
+  return `${hour} AM`;
 }
 
 // Helper function: Get color based on block title
 function getBlockColor(title) {
-  // Map common activities to colors
+  // New color palette
   const colorMap = {
-    'Morning Routine': 0x66bb6a,  // Green
-    'Work': 0x42a5f5,             // Blue
-    'Work Session': 0x42a5f5,     // Blue
-    'Lunch': 0xffb74d,            // Orange
-    'Lunch Break': 0xffb74d,      // Orange
-    'Exercise': 0xf06292,         // Pink
-    'Dinner': 0xffb74d,           // Orange
-    'Personal': 0xba68c8,         // Purple
-    'Personal Time': 0xba68c8,    // Purple
-    'Sleep': 0x78909c            // Blue-grey
-  }
+    'Morning Routine': 0x664d00, // field-drab
+    'Work': 0x6e2a0c,            // seal-brown
+    'Work Session': 0x6e2a0c,     // seal-brown
+    'Lunch': 0x691312,            // rosewood
+    'Lunch Break': 0x691312,      // rosewood
+    'Exercise': 0x291938,         // dark-purple
+    'Dinner': 0x042d3a,           // gunmetal
+    'Personal': 0x12403c,         // brunswick-green
+    'Personal Time': 0x12403c,    // brunswick-green
+    'Sleep': 0x475200            // dark-moss-green
+  };
+  
+  // Additional mappings for specific block titles
+  if (title.includes('Work Session 1')) return 0x6e2a0c; // seal-brown
+  if (title.includes('Work Session 2')) return 0x5d0933; // tyrian-purple
   
   // Check if the title contains any of the keys
   for (const [key, color] of Object.entries(colorMap)) {
     if (title.includes(key)) {
-      return color
+      return color;
     }
   }
   
   // Default color
-  return 0x4a90e2
+  return 0x12403c; // brunswick-green as default
 }
 
 // Helper function: Create text mesh
@@ -243,15 +510,16 @@ function createTextMesh(text, size) {
   // In a full implementation, we would use TextGeometry from Three.js
   // For simplicity, we'll create a placeholder plane with metadata
   const plane = new THREE.Mesh(
-    new THREE.PlaneGeometry(2, size),
+    new THREE.PlaneGeometry(2, size * 3), // Make base geometry 3x larger
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0 })
-  )
-  plane.userData.text = text
+  );
+  plane.userData.text = text;
+  plane.userData.textSize = size * 3; // Store 3x larger size
   
   // In production, replace this with actual TextGeometry
   // For now we'll display the text using HTML overlay in updateLabels()
   
-  return plane
+  return plane;
 }
 
 // Helper function: Parse day template from markdown
@@ -322,13 +590,96 @@ function transitionToDay() {
   const startPos = camera.position.clone();
   const startTarget = controls.target.clone();
   
-  // Target position (zoomed into the current day)
-  const targetPos = currentDaySquare.position.clone();
-  targetPos.z = 3; // Not too close, give some perspective
+  // Target position - straight in front of the day view
+  const targetPos = new THREE.Vector3(0, 0, 4); // Position directly in front
   
   // Make day view ready but invisible until animation progresses
   dayViewGroup.visible = false;
   dayViewGroup.position.set(0, 0, 0); // Reset position to origin
+  
+  // Animation variables
+  let startTime = null;
+  const duration = 2000; // ms
+  
+  function animateTransition(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const elapsed = timestamp - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    
+    // Ease in-out function
+    const eased = progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    
+    // Move camera
+    camera.position.lerpVectors(startPos, targetPos, eased);
+    
+    // Update controls target to center of day view
+    controls.target.lerpVectors(startTarget, new THREE.Vector3(0, 0, 0), eased);
+    controls.update();
+    
+    // Near the end of animation, switch views
+    if (progress > 0.8) {
+      if (!dayViewGroup.visible) {
+        console.log("Making day view visible");
+        lifeViewGroup.visible = false;
+        dayViewGroup.visible = true;
+        // Update time indicator immediately
+        updateTimeIndicator();
+        updateLabels();
+      }
+    }
+    
+    if (progress < 1) {
+      requestAnimationFrame(animateTransition);
+    } else {
+      // Animation complete
+      state.currentView = 'day';
+      state.transitioning = false;
+      controls.enabled = true;
+      
+      // Ensure camera is positioned directly in front of the day view
+      camera.position.set(0, 0, 4);
+      controls.target.set(0, 0, 0);
+      controls.update();
+      
+      console.log("Transition to day complete");
+    }
+    
+    renderer.render(scene, camera);
+  }
+  
+  requestAnimationFrame(animateTransition);
+}
+
+// Transition from Day view back to Life view
+function transitionToLife() {
+  if (state.transitioning) return;
+  
+  console.log("Transitioning to life view");
+  
+  state.transitioning = true;
+  controls.enabled = false;
+  
+  // Find the current day square for zoom target
+  let currentDaySquare;
+  lifeViewGroup.children.forEach(child => {
+    if (child.userData.isCurrent) {
+      currentDaySquare = child;
+    }
+  });
+  
+  if (!currentDaySquare) {
+    console.error("No current day square found");
+    return;
+  }
+  
+  // Starting camera position
+  const startPos = camera.position.clone();
+  const startTarget = controls.target.clone();
+  
+  // Target position (zoomed out to the life view)
+  const targetPos = new THREE.Vector3(0, 0, 5);
   
   // Animation variables
   let startTime = null;
@@ -353,13 +704,10 @@ function transitionToDay() {
     
     // Near the end of animation, switch views
     if (progress > 0.8) {
-      if (!dayViewGroup.visible) {
-        console.log("Making day view visible");
-        lifeViewGroup.visible = false;
-        dayViewGroup.visible = true;
-        // Update time indicator immediately
-        updateTimeIndicator();
-        updateLabels();
+      if (!lifeViewGroup.visible) {
+        console.log("Making life view visible");
+        dayViewGroup.visible = false;
+        lifeViewGroup.visible = true;
       }
     }
     
@@ -367,82 +715,16 @@ function transitionToDay() {
       requestAnimationFrame(animateTransition);
     } else {
       // Animation complete
-      state.currentView = 'day';
+      state.currentView = 'life';
       state.transitioning = false;
-      controls.enabled = true;
-      console.log("Transition to day complete");
+      controls.enabled = false; // Ensure controls are disabled in life view
+      console.log("Transition to life complete");
     }
     
     renderer.render(scene, camera);
   }
   
   requestAnimationFrame(animateTransition);
-}
-
-// Transition from Day view back to Life view
-function transitionToLife() {
-  if (state.transitioning) return
-  
-  state.transitioning = true
-  controls.enabled = false
-  
-  // Find the current day square for zoom target
-  let currentDaySquare
-  lifeViewGroup.children.forEach(child => {
-    if (child.userData.isCurrent) {
-      currentDaySquare = child
-    }
-  })
-  
-  if (!currentDaySquare) return
-  
-  // Starting camera position
-  const startPos = camera.position.clone()
-  const startTarget = controls.target.clone()
-  
-  // Target position (zoomed out to the life view)
-  const targetPos = new THREE.Vector3(0, 0, 5)
-  
-  // Animation variables
-  let startTime = null
-  const duration = 2000 // ms
-  
-  function animateTransition(timestamp) {
-    if (!startTime) startTime = timestamp
-    const elapsed = timestamp - startTime
-    const progress = Math.min(elapsed / duration, 1)
-    
-    // Ease in-out function
-    const eased = progress < 0.5
-      ? 4 * progress * progress * progress
-      : 1 - Math.pow(-2 * progress + 2, 3) / 2
-    
-    // Move camera
-    camera.position.lerpVectors(startPos, targetPos, eased)
-    
-    // Update controls target
-    controls.target.lerpVectors(startTarget, new THREE.Vector3(0, 0, 0), eased)
-    controls.update()
-    
-    // Near the end of animation, switch views
-    if (progress > 0.8 && !lifeViewGroup.visible) {
-      dayViewGroup.visible = false
-      lifeViewGroup.visible = true
-    }
-    
-    if (progress < 1) {
-      requestAnimationFrame(animateTransition)
-    } else {
-      // Animation complete
-      state.currentView = 'life'
-      state.transitioning = false
-      controls.enabled = true
-    }
-    
-    renderer.render(scene, camera)
-  }
-  
-  requestAnimationFrame(animateTransition)
 }
 
 // Update time indicator position based on current time
@@ -478,53 +760,54 @@ function createHTMLOverlays() {
 
 // Update HTML labels for block titles and times
 function updateLabels() {
-  const labelsContainer = document.getElementById('labels-container')
+  const labelsContainer = document.getElementById('labels-container');
   if (!labelsContainer) {
-    console.warn("Labels container not found")
-    return
+    console.warn("Labels container not found");
+    return;
   }
   
   // Clear existing labels
-  labelsContainer.innerHTML = ''
+  labelsContainer.innerHTML = '';
   
-  if (state.currentView !== 'day' || !dayViewGroup.visible) return
+  if (state.currentView !== 'day' || !dayViewGroup.visible) return;
   
-  console.log("Updating labels for day view")
+  console.log("Updating labels for day view");
   
   // Add back button when in day view
-  const backButton = document.createElement('button')
-  backButton.textContent = 'Back to Life View'
-  backButton.style.position = 'absolute'
-  backButton.style.top = '20px'
-  backButton.style.left = '20px'
-  backButton.style.zIndex = '1000'
-  backButton.style.pointerEvents = 'auto'
-  backButton.addEventListener('click', transitionToLife)
-  labelsContainer.appendChild(backButton)
+  const backButton = document.createElement('button');
+  backButton.textContent = 'Back to Life View';
+  backButton.style.position = 'absolute';
+  backButton.style.top = '20px';
+  backButton.style.left = '20px';
+  backButton.style.zIndex = '1000';
+  backButton.style.pointerEvents = 'auto';
+  backButton.style.fontSize = '18px'; // Larger font for button
+  backButton.addEventListener('click', transitionToLife);
+  labelsContainer.appendChild(backButton);
   
   // Add current time display
-  const now = new Date()
-  const timeDisplay = document.createElement('div')
-  timeDisplay.textContent = now.toLocaleTimeString()
-  timeDisplay.style.position = 'absolute'
-  timeDisplay.style.top = '20px'
-  timeDisplay.style.right = '20px'
-  timeDisplay.style.padding = '8px 12px'
-  timeDisplay.style.background = 'rgba(0, 0, 0, 0.7)'
-  timeDisplay.style.color = 'white'
-  timeDisplay.style.borderRadius = '4px'
-  timeDisplay.style.fontFamily = 'Inter, sans-serif'
-  timeDisplay.style.fontSize = '16px'
-  timeDisplay.style.zIndex = '1000'
-  labelsContainer.appendChild(timeDisplay)
+  const now = new Date();
+  const timeDisplay = document.createElement('div');
+  timeDisplay.textContent = now.toLocaleTimeString();
+  timeDisplay.style.position = 'absolute';
+  timeDisplay.style.top = '20px';
+  timeDisplay.style.right = '20px';
+  timeDisplay.style.padding = '8px 16px';
+  timeDisplay.style.background = 'rgba(0, 0, 0, 0.7)';
+  timeDisplay.style.color = 'white';
+  timeDisplay.style.borderRadius = '4px';
+  timeDisplay.style.fontFamily = 'Inter, sans-serif';
+  timeDisplay.style.fontSize = '24px'; // Larger font for time display
+  timeDisplay.style.zIndex = '1000';
+  labelsContainer.appendChild(timeDisplay);
   
   // Count labels we'll add
-  let labelCount = 0
+  let labelCount = 0;
   
   // Update all text meshes
   dayViewGroup.traverse((object) => {
     if (object.userData && object.userData.text) {
-      const screenPosition = getScreenPosition(object)
+      const screenPosition = getScreenPosition(object);
       
       // Skip if the object is behind the camera or too far to the sides
       if (screenPosition.behind || 
@@ -532,29 +815,29 @@ function updateLabels() {
           screenPosition.x > window.innerWidth || 
           screenPosition.y < 0 || 
           screenPosition.y > window.innerHeight) {
-        return
+        return;
       }
       
-      const label = document.createElement('div')
-      label.textContent = object.userData.text
-      label.style.position = 'absolute'
-      label.style.left = `${screenPosition.x}px`
-      label.style.top = `${screenPosition.y}px`
-      label.style.fontSize = `${object.geometry.parameters.height * 40}px`
-      label.style.fontFamily = 'Inter, sans-serif'
-      label.style.color = 'black'
-      label.style.transform = 'translate(-50%, -50%)'
-      label.style.textAlign = 'center'
-      label.style.fontWeight = 'bold'
-      label.style.pointerEvents = 'none'
-      label.style.textShadow = '0px 0px 2px white'
+      const label = document.createElement('div');
+      label.textContent = object.userData.text;
+      label.style.position = 'absolute';
+      label.style.left = `${screenPosition.x}px`;
+      label.style.top = `${screenPosition.y}px`;
+      label.style.fontSize = `${object.userData.textSize * 40}px`; // Use stored 3x size
+      label.style.fontFamily = 'Inter, sans-serif';
+      label.style.color = 'white'; // Change text color to white
+      label.style.transform = 'translate(-50%, -50%)';
+      label.style.textAlign = 'center';
+      label.style.fontWeight = 'bold';
+      label.style.pointerEvents = 'none';
+      label.style.textShadow = '0px 0px 3px rgba(0, 0, 0, 0.7)'; // Add shadow for readability
       
-      labelsContainer.appendChild(label)
-      labelCount++
+      labelsContainer.appendChild(label);
+      labelCount++;
     }
-  })
+  });
   
-  console.log(`Added ${labelCount} text labels`)
+  console.log(`Added ${labelCount} text labels`);
 }
 
 // Helper function to get screen position of a 3D object
@@ -618,8 +901,13 @@ function onWindowResize() {
 function animate() {
   requestAnimationFrame(animate)
   
-  // Update controls
-  controls.update()
+  // Only enable controls in day view
+  controls.enabled = (state.currentView === 'day' && !state.transitioning)
+  
+  // Update controls only if enabled
+  if (controls.enabled) {
+    controls.update()
+  }
   
   // Update time indicator in day view
   if (state.currentView === 'day' && dayViewGroup.visible) {
@@ -627,8 +915,98 @@ function animate() {
     updateLabels()
   }
   
+  // Update debug label positions if debug mode is on
+  if (state.debugMode) {
+    updateDebugLabelPositions();
+  }
+  
   // Render scene
   renderer.render(scene, camera)
+}
+
+// Function to add debug labels showing row,column coordinates
+function addDebugLabel(square, text) {
+  const position = square.position.clone();
+  
+  // Create HTML label
+  const label = document.createElement('div');
+  label.className = 'debug-label';
+  label.textContent = text;
+  label.style.position = 'absolute';
+  label.style.color = 'red';
+  label.style.fontSize = '10px';
+  label.style.fontFamily = 'monospace';
+  label.style.fontWeight = 'bold';
+  label.style.pointerEvents = 'none';
+  label.style.zIndex = '1000';
+  label.style.backgroundColor = 'rgba(0,0,0,0.5)';
+  label.style.padding = '2px';
+  label.style.userSelect = 'none';
+  
+  // Store the 3D position with the label
+  label.dataset.x = position.x;
+  label.dataset.y = position.y;
+  label.dataset.z = position.z;
+  
+  // Add to document
+  document.body.appendChild(label);
+  
+  // Update its position
+  updateDebugLabelPosition(label);
+}
+
+// Function to update debug label positions
+function updateDebugLabelPositions() {
+  if (!state.debugMode) return;
+  
+  const labels = document.querySelectorAll('.debug-label');
+  labels.forEach(updateDebugLabelPosition);
+}
+
+// Update a single debug label's position
+function updateDebugLabelPosition(label) {
+  const position = new THREE.Vector3(
+    parseFloat(label.dataset.x),
+    parseFloat(label.dataset.y),
+    parseFloat(label.dataset.z)
+  );
+  
+  // Project position to screen coordinates
+  position.project(camera);
+  
+  // Convert to CSS coordinates
+  const x = (position.x * 0.5 + 0.5) * window.innerWidth;
+  const y = (position.y * -0.5 + 0.5) * window.innerHeight;
+  
+  // Only show if in front of camera
+  if (position.z < 1) {
+    label.style.display = 'block';
+    label.style.transform = `translate(-50%, -50%)`;
+    label.style.left = `${x}px`;
+    label.style.top = `${y}px`;
+  } else {
+    label.style.display = 'none';
+  }
+}
+
+// Clear all debug labels
+function clearDebugLabels() {
+  const labels = document.querySelectorAll('.debug-label');
+  labels.forEach(label => label.remove());
+}
+
+// Toggle debug mode
+function toggleDebugMode() {
+  state.debugMode = !state.debugMode;
+  console.log(`Debug mode: ${state.debugMode ? 'ON' : 'OFF'}`);
+  
+  if (state.debugMode) {
+    // Recreate the life view with debug labels
+    createLifeView();
+  } else {
+    // Clear debug labels
+    clearDebugLabels();
+  }
 }
 
 // Initialize
@@ -640,6 +1018,9 @@ function init() {
   createLifeView()
   createDayView()
   createHTMLOverlays()
+  
+  // Camera is now positioned by createLifeView
+  controls.enableRotate = false; // Disable rotation permanently
   
   // Event listeners
   window.addEventListener('resize', onWindowResize)
@@ -671,6 +1052,8 @@ function init() {
       
       // Add hover effect
       renderer.domElement.addEventListener('mousemove', (event) => {
+        if (state.currentView !== 'life') return;
+        
         raycaster.setFromCamera(
           new THREE.Vector2(
             (event.clientX / window.innerWidth) * 2 - 1,
@@ -692,6 +1075,23 @@ function init() {
       })
     }
   })
+  
+  // Add debug toggle button
+  const debugButton = document.createElement('button');
+  debugButton.textContent = 'Toggle Debug Grid';
+  debugButton.style.position = 'fixed';
+  debugButton.style.bottom = '50px';
+  debugButton.style.right = '10px';
+  debugButton.style.zIndex = '1000';
+  debugButton.addEventListener('click', toggleDebugMode);
+  document.body.appendChild(debugButton);
+  
+  // Add keyboard shortcut for debug mode (press 'D')
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'd' || event.key === 'D') {
+      toggleDebugMode();
+    }
+  });
 }
 
 init()
