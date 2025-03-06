@@ -437,13 +437,40 @@ function createDayView() {
   backgroundPlane.position.z = -0.1;
   dayViewGroup.add(backgroundPlane);
   
+  // Add hour markers
+  for (let hour = 0; hour <= 24; hour++) {
+    const markerGeometry = new THREE.PlaneGeometry(3, 0.02);
+    const markerMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0x444444,
+      side: THREE.DoubleSide
+    });
+    const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+    const yPos = -hour * hourHeight + timelineHeight / 2;
+    marker.position.set(0, yPos, 0.01);
+    dayViewGroup.add(marker);
+    
+    // Add hour text
+    if (hour % 3 === 0 && hour <= 24) { // Show every 3 hours
+      const hourText = createTextMesh(formatHour(hour), 0.1);
+      hourText.position.set(-2, yPos, 0.01);
+      dayViewGroup.add(hourText);
+    }
+  }
+  
   blocks.forEach(block => {
     const startHour = getHourFromTimeString(block.startTime);
     const endHour = getHourFromTimeString(block.endTime);
+    
+    // Skip invalid time ranges
+    if (isNaN(startHour) || isNaN(endHour)) {
+      console.warn(`Invalid time range for block "${block.title}": ${block.startTime} - ${block.endTime}`);
+      return;
+    }
+    
     const duration = endHour - startHour;
     
     // Handle overnight blocks (when end time is less than start time)
-    const adjustedDuration = duration < 0 ? duration + 24 : duration;
+    const adjustedDuration = duration <= 0 ? duration + 24 : duration;
     
     // Create block mesh
     const blockHeight = adjustedDuration * hourHeight;
@@ -466,8 +493,8 @@ function createDayView() {
     const mainBlock = new THREE.Mesh(mainGeometry, mainMaterial);
     blockGroup.add(mainBlock);
     
-    // Rounded corner cylinders
-    const radius = 0.1; // 4px equivalent in 3D space
+    // Rounded corner cylinders - use a smaller radius that fits better
+    const radius = 0.05; // Smaller radius for corners
     const cornerPositions = [
       [-blockWidth/2 + radius, blockHeight/2 - radius, 0], // top-left
       [blockWidth/2 - radius, blockHeight/2 - radius, 0],  // top-right
@@ -483,62 +510,36 @@ function createDayView() {
       blockGroup.add(corner);
     });
     
-    // Position block on timeline
+    // Position block on timeline - calculate position based on start and duration
     const yPos = -(startHour + adjustedDuration / 2) * hourHeight + timelineHeight / 2;
     blockGroup.position.set(0, yPos, 0);
     
-    // Add block title
-    const blockTitle = createTextMesh(block.title, 0.2);
-    blockTitle.position.set(0, blockHeight / 2 - 0.3, blockDepth / 2 + 0.01);
+    // Add block title - position in center of block
+    const blockTitle = createTextMesh(block.title, 0.18); // Increased from 0.067 to make text bigger
+    // Position in the center of the block
+    blockTitle.position.set(0, 0, blockDepth / 2 + 0.01);
     blockGroup.add(blockTitle);
-    
-    // Add time label
-    const timeLabel = createTextMesh(`${block.startTime} - ${block.endTime}`, 0.15);
-    timeLabel.position.set(0, -blockHeight / 2 + 0.2, blockDepth / 2 + 0.01);
-    blockGroup.add(timeLabel);
     
     dayViewGroup.add(blockGroup);
   });
   
   // Create current time indicator
-  const indicatorGeometry = new THREE.PlaneGeometry(4, 0.05);
+  const indicatorGeometry = new THREE.PlaneGeometry(4, 0.02);
   const indicatorMaterial = new THREE.MeshBasicMaterial({ 
     color: 0xff3333,
-    side: THREE.DoubleSide, // Make sure it's visible from both sides
+    side: THREE.DoubleSide, 
     transparent: true,
     opacity: 0.9,
     depthTest: false // Ensures the indicator is always rendered on top
   });
   const timeIndicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
-  timeIndicator.position.z = 0.15; // Increased z-position to be in front of blocks
+  timeIndicator.position.z = 0.15; // In front of blocks
   dayViewGroup.add(timeIndicator);
   dayViewGroup.userData.timeIndicator = timeIndicator;
   
   // Hide initially
   dayViewGroup.visible = false;
   dayViewGroup.position.z = 0; // Position at the origin
-  
-  // Add hour markers
-  for (let hour = 0; hour <= 24; hour += 3) {
-    const hourMarkerGeometry = new THREE.PlaneGeometry(3.5, 0.02);
-    const hourMarkerMaterial = new THREE.MeshBasicMaterial({ 
-      color: 0x444444, 
-      transparent: true,
-      opacity: 0.8,
-      side: THREE.DoubleSide 
-    });
-    const hourMarker = new THREE.Mesh(hourMarkerGeometry, hourMarkerMaterial);
-    
-    const yPos = -hour * hourHeight + timelineHeight / 2;
-    hourMarker.position.set(0, yPos, -0.05);
-    
-    dayViewGroup.add(hourMarker);
-    
-    // Add hour text - larger size
-    const hourText = createTextMesh(formatHour(hour), 0.15);
-    hourText.position.set(-2, yPos, 0.01);
-    dayViewGroup.add(hourText);
-  }
 }
 
 // Helper function to format hour (12-hour format)
@@ -551,33 +552,78 @@ function formatHour(hour) {
 
 // Helper function: Get color based on block title
 function getBlockColor(title) {
-  // New color palette
+  // New color palette with block types from dayTemplate
   const colorMap = {
     'Morning Routine': 0x664d00, // field-drab
-    'Work': 0x6e2a0c,            // seal-brown
+    'Wake up': 0x664d00,         // field-drab (morning)
+    'Deep work': 0x6e2a0c,       // seal-brown
     'Work Session': 0x6e2a0c,     // seal-brown
+    'Break': 0x333333,           // dark gray
+    'Short break': 0x333333,      // dark gray
+    'Micro-break': 0x333333,      // dark gray
     'Lunch': 0x691312,            // rosewood
-    'Lunch Break': 0x691312,      // rosewood
     'Exercise': 0x291938,         // dark-purple
+    'Energizing': 0x291938,       // dark-purple (for exercise/energizing)
     'Dinner': 0x042d3a,           // gunmetal
+    'Unwind': 0x042d3a,           // gunmetal (evening)
     'Personal': 0x12403c,         // brunswick-green
-    'Personal Time': 0x12403c,    // brunswick-green
-    'Sleep': 0x475200            // dark-moss-green
+    'Study': 0x12403c,            // brunswick-green (personal study)
+    'Sleep': 0x475200,            // dark-moss-green
+    'Shutdown': 0x475200          // dark-moss-green (sleep routine)
   };
+
+  // Fuzzy matching implementation
+  function getSimilarity(str1, str2) {
+    str1 = str1.toLowerCase();
+    str2 = str2.toLowerCase();
+    
+    // Check for direct inclusion first
+    if (str1.includes(str2) || str2.includes(str1)) {
+      return 0.9;
+    }
+    
+    // Split into words for partial matching
+    const words1 = str1.split(/\s+/);
+    const words2 = str2.split(/\s+/);
+    
+    // Count matching words
+    let matches = 0;
+    for (const word1 of words1) {
+      for (const word2 of words2) {
+        if (word1.length > 3 && word2.length > 3) { // Only match significant words
+          if (word1.includes(word2) || word2.includes(word1)) {
+            matches++;
+          }
+        }
+      }
+    }
+    
+    // Calculate similarity based on matched words
+    if (matches > 0) {
+      return matches / Math.max(words1.length, words2.length);
+    }
+    
+    return 0; // No similarity
+  }
   
-  // Additional mappings for specific block titles
-  if (title.includes('Work Session 1')) return 0x6e2a0c; // seal-brown
-  if (title.includes('Work Session 2')) return 0x5d0933; // tyrian-purple
+  // Handle specific work sessions
+  if (title.includes('Work Session 1') || title.includes('Deep work block')) return 0x6e2a0c; // seal-brown
+  if (title.includes('Work Session 2') || title.includes('afternoon work block')) return 0x5d0933; // tyrian-purple
   
-  // Check if the title contains any of the keys
+  // Find best match using fuzzy matching
+  let bestMatch = null;
+  let highestSimilarity = 0.3; // Threshold for minimum similarity
+  
   for (const [key, color] of Object.entries(colorMap)) {
-    if (title.includes(key)) {
-      return color;
+    const similarity = getSimilarity(title, key);
+    if (similarity > highestSimilarity) {
+      highestSimilarity = similarity;
+      bestMatch = color;
     }
   }
   
-  // Default color
-  return 0x12403c; // brunswick-green as default
+  // Return the best match if found, otherwise default color
+  return bestMatch || 0x12403c; // brunswick-green as default
 }
 
 // Helper function: Create text mesh
@@ -628,15 +674,41 @@ function parseDayTemplate(template) {
     
     // Only add if we have a title and time range
     if (title && timeRange) {
-      // Parse the time range
-      const [startTime, endTime] = timeRange.split('-').map(t => t.trim());
+      // Parse the time range with better handling for various formats
+      const timeRangeParts = timeRange.split('-');
       
-      blocks.push({
-        title,
-        startTime,
-        endTime,
-        description
-      });
+      if (timeRangeParts.length >= 2) {
+        // Normalize time formats
+        let startTime = timeRangeParts[0].trim();
+        let endTime = timeRangeParts[1].trim();
+        
+        // Ensure HH:MM format
+        if (!startTime.includes(':')) {
+          // If just a number, format as HH:00
+          startTime = `${startTime}:00`;
+        }
+        
+        if (!endTime.includes(':')) {
+          // If just a number, format as HH:00
+          endTime = `${endTime}:00`;
+        }
+        
+        // Ensure two-digit hours (e.g., "9:00" -> "09:00")
+        if (startTime.match(/^\d:\d\d$/)) {
+          startTime = `0${startTime}`;
+        }
+        
+        if (endTime.match(/^\d:\d\d$/)) {
+          endTime = `0${endTime}`;
+        }
+        
+        blocks.push({
+          title,
+          startTime,
+          endTime,
+          description
+        });
+      }
     }
   });
   
@@ -645,8 +717,18 @@ function parseDayTemplate(template) {
 
 // Helper function: Convert time string to hour number
 function getHourFromTimeString(timeStr) {
-  const [hours, minutes] = timeStr.split(':').map(Number)
-  return hours + minutes / 60
+  // Clean the time string (handles formats like "07:00" or "9:00" or just "9")
+  const cleanedTime = timeStr.trim();
+  
+  // Try different formats
+  if (cleanedTime.includes(':')) {
+    // Format with colon (HH:MM or H:MM)
+    const [hours, minutes] = cleanedTime.split(':').map(part => parseInt(part, 10));
+    return hours + (minutes / 60);
+  } else {
+    // Format without colon, just hours
+    return parseInt(cleanedTime, 10);
+  }
 }
 
 // Transition from Life view to Day view
@@ -967,7 +1049,12 @@ function updateLabels() {
         label.style.position = 'absolute';
         label.style.left = `${screenPosition.x}px`;
         label.style.top = `${screenPosition.y}px`;
-        label.style.fontSize = `${object.userData.textSize * 40}px`; // Use stored 3x size
+        
+        // Adjust size based on camera distance and text size
+        // Using smaller base size for better readability
+        const distanceFactor = Math.min(1.5, Math.max(0.5, 1 / (camera.position.z * 0.1)));
+        label.style.fontSize = `${object.userData.textSize * 20 * distanceFactor}px`; // Increased from 16 to 20 for larger text
+        
         label.style.fontFamily = 'Inter, sans-serif';
         label.style.color = 'white'; // Text color
         label.style.transform = 'translate(-50%, -50%)';
@@ -975,6 +1062,8 @@ function updateLabels() {
         label.style.fontWeight = 'bold';
         label.style.pointerEvents = 'none';
         label.style.textShadow = '0px 0px 3px rgba(0, 0, 0, 0.7)'; // Shadow for readability
+        label.style.whiteSpace = 'nowrap'; // Prevent text wrapping
+        label.style.maxWidth = '300px'; // Limit maximum width
         
         labelsContainer.appendChild(label);
       }
@@ -1342,7 +1431,7 @@ async function init() {
     }
     
     // Transition to day view with 't' key
-    if (event.key === 't' || event.key === 'T') {
+    if (event.key === 'z' || event.key === 'Z') {
       if (state.currentView === 'life' && !state.transitioning) {
         console.log('Transitioning to day view via keyboard shortcut');
         transitionToDay();
