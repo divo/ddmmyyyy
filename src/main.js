@@ -8,29 +8,7 @@ const state = {
   transitioning: false,
   currentDay: new Date(),
   debugMode: false, // Debug flag for displaying grid coordinates
-  dayTemplate: `# Morning Routine
-06:00 - 09:00
-
-# Work Session 1
-09:00 - 12:00
-
-# Lunch Break
-12:00 - 13:00
-
-# Work Session 2
-13:00 - 17:00
-
-# Exercise
-17:00 - 18:00
-
-# Dinner
-18:00 - 19:00
-
-# Personal Time
-19:00 - 22:00
-
-# Sleep
-22:00 - 06:00`
+  dayTemplate: '' // Will be loaded from external file
 }
 
 // Setup
@@ -77,6 +55,50 @@ scene.add(lifeViewGroup)
 const dayViewGroup = new THREE.Group()
 dayViewGroup.visible = false
 scene.add(dayViewGroup)
+
+// Load the day template from external file
+async function loadDayTemplate() {
+  try {
+    const response = await fetch('dayTemplate.md');
+    if (!response.ok) {
+      throw new Error(`Failed to load template: ${response.status} ${response.statusText}`);
+    }
+    const text = await response.text();
+    state.dayTemplate = text;
+    console.log('Day template loaded successfully');
+    
+    // Create day view once template is loaded
+    createDayView();
+  } catch (error) {
+    console.error('Error loading day template:', error);
+    // Fallback to default template
+    state.dayTemplate = `# Morning Routine
+06:00 - 09:00
+
+# Work Session 1
+09:00 - 12:00
+
+# Lunch Break
+12:00 - 13:00
+
+# Work Session 2
+13:00 - 17:00
+
+# Exercise
+17:00 - 18:00
+
+# Dinner
+18:00 - 19:00
+
+# Personal Time
+19:00 - 22:00
+
+# Sleep
+22:00 - 06:00`;
+    console.log('Using fallback template');
+    createDayView();
+  }
+}
 
 // Create Life View
 function createLifeView() {
@@ -568,38 +590,48 @@ function createTextMesh(text, size) {
   return plane;
 }
 
-// Helper function: Parse day template from markdown
+// Parse the day template to extract blocks with titles, times, and descriptions
 function parseDayTemplate(template) {
   const blocks = [];
-  const lines = template.trim().split('\n');
   
-  console.log(`Parsing template with ${lines.length} lines`);
+  // Split by section markers (# titles)
+  const sections = template.split('\n#').map((section, index) => 
+    index === 0 ? section : '#' + section
+  );
   
-  // Improved parsing that's more forgiving of spacing
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+  sections.forEach(section => {
+    // Skip empty sections
+    if (!section.trim()) return;
     
-    // If this is a heading
-    if (line.startsWith('#')) {
-      const title = line.replace('#', '').trim();
+    // Split section into lines
+    const lines = section.trim().split('\n');
+    
+    // Extract title (remove leading #)
+    const title = lines[0].startsWith('#') ? 
+      lines[0].substring(1).trim() : 
+      lines[0].trim();
+    
+    // Extract time range (second line)
+    const timeRange = lines.length > 1 ? lines[1].trim() : '';
+    
+    // Extract description (all remaining lines after the time)
+    const description = lines.length > 2 ? 
+      lines.slice(2).join('\n').trim() : 
+      '';
+    
+    // Only add if we have a title and time range
+    if (title && timeRange) {
+      // Parse the time range
+      const [startTime, endTime] = timeRange.split('-').map(t => t.trim());
       
-      // Look for time range in next line if available
-      if (i + 1 < lines.length) {
-        const timeLine = lines[i + 1].trim();
-        if (timeLine.includes('-')) {
-          const times = timeLine.split('-').map(t => t.trim());
-          if (times.length === 2) {
-            blocks.push({
-              title,
-              startTime: times[0],
-              endTime: times[1]
-            });
-            console.log(`Added block: ${title} (${times[0]} - ${times[1]})`);
-          }
-        }
-      }
+      blocks.push({
+        title,
+        startTime,
+        endTime,
+        description
+      });
     }
-  }
+  });
   
   return blocks;
 }
@@ -792,98 +824,171 @@ function updateTimeIndicator() {
 
 // Create HTML overlays for text
 function createHTMLOverlays() {
-  // Create container
-  const labelsContainer = document.createElement('div')
-  labelsContainer.id = 'labels-container'
-  labelsContainer.style.position = 'absolute'
-  labelsContainer.style.top = '0'
-  labelsContainer.style.left = '0'
-  labelsContainer.style.width = '100%'
-  labelsContainer.style.height = '100%'
-  labelsContainer.style.pointerEvents = 'none'
-  document.body.appendChild(labelsContainer)
-}
-
-// Update HTML labels for block titles and times
-function updateLabels() {
-  const labelsContainer = document.getElementById('labels-container');
-  if (!labelsContainer) {
-    console.warn("Labels container not found");
-    return;
-  }
-  
-  // Clear existing labels
-  labelsContainer.innerHTML = '';
-  
-  if (state.currentView !== 'day' || !dayViewGroup.visible) return;
-  
-  console.log("Updating labels for day view");
-  
-  // Add back button when in day view
+  // Create back button
   const backButton = document.createElement('button');
-  backButton.textContent = 'Back to Life View';
-  backButton.style.position = 'absolute';
-  backButton.style.top = '20px';
-  backButton.style.left = '20px';
-  backButton.style.zIndex = '1000';
-  backButton.style.pointerEvents = 'auto';
-  backButton.style.fontSize = '18px'; // Larger font for button
-  backButton.addEventListener('click', transitionToLife);
-  labelsContainer.appendChild(backButton);
-  
-  // Add current time display
-  const now = new Date();
-  const timeDisplay = document.createElement('div');
-  timeDisplay.textContent = now.toLocaleTimeString();
-  timeDisplay.style.position = 'absolute';
-  timeDisplay.style.top = '20px';
-  timeDisplay.style.right = '20px';
-  timeDisplay.style.padding = '8px 16px';
-  timeDisplay.style.background = 'rgba(0, 0, 0, 0.7)';
-  timeDisplay.style.color = 'white';
-  timeDisplay.style.borderRadius = '4px';
-  timeDisplay.style.fontFamily = 'Inter, sans-serif';
-  timeDisplay.style.fontSize = '24px'; // Larger font for time display
-  timeDisplay.style.zIndex = '1000';
-  labelsContainer.appendChild(timeDisplay);
-  
-  // Count labels we'll add
-  let labelCount = 0;
-  
-  // Update all text meshes
-  dayViewGroup.traverse((object) => {
-    if (object.userData && object.userData.text) {
-      const screenPosition = getScreenPosition(object);
-      
-      // Skip if the object is behind the camera or too far to the sides
-      if (screenPosition.behind || 
-          screenPosition.x < 0 || 
-          screenPosition.x > window.innerWidth || 
-          screenPosition.y < 0 || 
-          screenPosition.y > window.innerHeight) {
-        return;
-      }
-      
-      const label = document.createElement('div');
-      label.textContent = object.userData.text;
-      label.style.position = 'absolute';
-      label.style.left = `${screenPosition.x}px`;
-      label.style.top = `${screenPosition.y}px`;
-      label.style.fontSize = `${object.userData.textSize * 40}px`; // Use stored 3x size
-      label.style.fontFamily = 'Inter, sans-serif';
-      label.style.color = 'white'; // Change text color to white
-      label.style.transform = 'translate(-50%, -50%)';
-      label.style.textAlign = 'center';
-      label.style.fontWeight = 'bold';
-      label.style.pointerEvents = 'none';
-      label.style.textShadow = '0px 0px 3px rgba(0, 0, 0, 0.7)'; // Add shadow for readability
-      
-      labelsContainer.appendChild(label);
-      labelCount++;
+  backButton.textContent = '← Back';
+  backButton.className = 'back-button';
+  backButton.style.display = 'none';
+  backButton.addEventListener('click', () => {
+    if (state.currentView === 'day' && !state.transitioning) {
+      transitionToLife();
     }
   });
+  document.body.appendChild(backButton);
   
-  console.log(`Added ${labelCount} text labels`);
+  // Create current time display
+  const timeDisplay = document.createElement('div');
+  timeDisplay.className = 'time-display';
+  timeDisplay.style.display = 'none';
+  document.body.appendChild(timeDisplay);
+  
+  // Create description panel for day view
+  const descriptionPanel = document.createElement('div');
+  descriptionPanel.className = 'description-panel';
+  descriptionPanel.style.display = 'none';
+  document.body.appendChild(descriptionPanel);
+  
+  // Store references
+  state.htmlOverlays = {
+    backButton,
+    timeDisplay,
+    descriptionPanel
+  };
+}
+
+// Update HTML overlay labels
+function updateLabels() {
+  if (!state.htmlOverlays) return;
+  
+  const { backButton, timeDisplay, descriptionPanel } = state.htmlOverlays;
+  
+  if (state.currentView === 'day') {
+    // Show back button in day view
+    backButton.style.display = 'block';
+    timeDisplay.style.display = 'block';
+    
+    // Get or create the labels container for block title and time labels
+    let labelsContainer = document.getElementById('labels-container');
+    
+    if (!labelsContainer) {
+      labelsContainer = document.createElement('div');
+      labelsContainer.id = 'labels-container';
+      labelsContainer.style.position = 'absolute';
+      labelsContainer.style.top = '0';
+      labelsContainer.style.left = '0';
+      labelsContainer.style.width = '100%';
+      labelsContainer.style.height = '100%';
+      labelsContainer.style.pointerEvents = 'none';
+      document.body.appendChild(labelsContainer);
+    } else {
+      // Clear existing text labels but keep the container
+      labelsContainer.innerHTML = '';
+    }
+    
+    // Update current time display
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    timeDisplay.textContent = `${hours}:${minutes}`;
+    
+    // Calculate current hour for finding the relevant block
+    const currentHour = now.getHours() + now.getMinutes() / 60;
+    const blocks = parseDayTemplate(state.dayTemplate);
+    
+    // Find the block that contains the current time
+    const currentBlock = blocks.find(block => {
+      const startHour = getHourFromTimeString(block.startTime);
+      let endHour = getHourFromTimeString(block.endTime);
+      
+      // Handle overnight blocks
+      if (endHour < startHour) {
+        endHour += 24;
+      }
+      
+      return currentHour >= startHour && currentHour < endHour;
+    });
+    
+    // Update all text labels on the timeline blocks
+    dayViewGroup.traverse((object) => {
+      if (object.userData && object.userData.text) {
+        const screenPosition = getScreenPosition(object);
+        
+        // Skip if the object is behind the camera or too far to the sides
+        if (screenPosition.behind || 
+            screenPosition.x < 0 || 
+            screenPosition.x > window.innerWidth || 
+            screenPosition.y < 0 || 
+            screenPosition.y > window.innerHeight) {
+          return;
+        }
+        
+        const label = document.createElement('div');
+        label.textContent = object.userData.text;
+        label.style.position = 'absolute';
+        label.style.left = `${screenPosition.x}px`;
+        label.style.top = `${screenPosition.y}px`;
+        label.style.fontSize = `${object.userData.textSize * 40}px`; // Use stored 3x size
+        label.style.fontFamily = 'Inter, sans-serif';
+        label.style.color = 'white'; // Text color
+        label.style.transform = 'translate(-50%, -50%)';
+        label.style.textAlign = 'center';
+        label.style.fontWeight = 'bold';
+        label.style.pointerEvents = 'none';
+        label.style.textShadow = '0px 0px 3px rgba(0, 0, 0, 0.7)'; // Shadow for readability
+        
+        labelsContainer.appendChild(label);
+      }
+    });
+    
+    // Position and update the description panel for the current time block
+    if (currentBlock && currentBlock.description) {
+      // Calculate position based on current time
+      const timelineHeight = 10;
+      const hourHeight = timelineHeight / 24;
+      const yPos = -currentHour * hourHeight + timelineHeight / 2;
+      
+      // Calculate the center position of the timeline
+      const timelineCenter = new THREE.Vector3(0, yPos, 0.15);
+      timelineCenter.applyMatrix4(dayViewGroup.matrixWorld);
+      timelineCenter.project(camera);
+      
+      // Calculate the right edge of the timeline (approx. 4 units width)
+      const timelineActualWidth = 4;
+      const timelineRightEdge = new THREE.Vector3(timelineActualWidth/2, yPos, 0.15);
+      timelineRightEdge.applyMatrix4(dayViewGroup.matrixWorld);
+      timelineRightEdge.project(camera);
+      
+      // Calculate screen positions
+      const screenY = ((-timelineCenter.y + 1) / 2) * window.innerHeight;
+      const edgeScreenX = ((timelineRightEdge.x + 1) / 2) * window.innerWidth;
+      
+      // Position the description panel 100px to the right of the timeline edge
+      descriptionPanel.style.top = `${screenY}px`;
+      descriptionPanel.style.left = `${edgeScreenX + 100}px`;
+      descriptionPanel.style.transform = 'translateY(-50%)';
+      
+      // Update panel content
+      descriptionPanel.innerHTML = `
+        <h2>${currentBlock.title}</h2>
+        <div class="time-range">${currentBlock.startTime} - ${currentBlock.endTime}</div>
+        <div class="description">${currentBlock.description.replace(/\n/g, '<br>')}</div>
+      `;
+      descriptionPanel.style.display = 'block';
+    } else {
+      descriptionPanel.style.display = 'none';
+    }
+  } else {
+    // Hide elements in life view
+    backButton.style.display = 'none';
+    timeDisplay.style.display = 'none';
+    descriptionPanel.style.display = 'none';
+    
+    // Hide labels container if it exists
+    const labelsContainer = document.getElementById('labels-container');
+    if (labelsContainer) {
+      labelsContainer.innerHTML = '';
+    }
+  }
 }
 
 // Helper function to get screen position of a 3D object
@@ -1087,14 +1192,109 @@ function toggleDebugMode() {
   }
 }
 
+// Function to zoom out and view the entire grid
+function viewEntireGrid() {
+  if (state.currentView !== 'life' || state.transitioning) return;
+  
+  console.log('Zooming out to view entire grid');
+  
+  // Calculate appropriate zoom level to see entire grid
+  const baseUnit = 0.05;
+  const blockSize = baseUnit;
+  const horizontalSpacing = baseUnit * 3;
+  const verticalSpacing = baseUnit * 3;
+  
+  const daysPerRow = 365;
+  const rows = 90; // years
+  
+  const totalUnitWidth = daysPerRow * (blockSize + horizontalSpacing) - horizontalSpacing;
+  const totalUnitHeight = rows * (blockSize + verticalSpacing) - verticalSpacing;
+  
+  // Position camera at the center of the grid
+  const centerX = 0;
+  const centerY = -totalUnitHeight / 4; // Shift up a bit to focus more on earlier years
+  const centerZ = 5;
+  
+  // Calculate zoom level to fit entire grid (with some padding)
+  const padding = 1.1; // 10% padding
+  const aspect = window.innerWidth / window.innerHeight;
+  
+  // Calculate zoom based on width and height
+  let targetZoom;
+  if (aspect >= 1) {
+    // For landscape orientation, fit height with padding
+    targetZoom = 0.5 * (totalUnitHeight * padding) / 10;
+  } else {
+    // For portrait orientation, fit width with padding
+    targetZoom = 0.5 * (totalUnitWidth * padding) / (10 * aspect);
+  }
+  
+  // Clamp to reasonable values
+  targetZoom = Math.max(0.1, Math.min(targetZoom, 5));
+  
+  // Create animation for smooth transition
+  const startPos = camera.position.clone();
+  const startZoom = state.lifeViewControls.zoomLevel;
+  const duration = 1000; // ms
+  const startTime = Date.now();
+  
+  function animateZoomOut() {
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    
+    // Use easing function for smooth transition
+    const easeProgress = 1 - Math.pow(1 - progress, 3); // Cubic ease out
+    
+    // Update camera position
+    camera.position.x = startPos.x + (centerX - startPos.x) * easeProgress;
+    camera.position.y = startPos.y + (centerY - startPos.y) * easeProgress;
+    
+    // Update zoom level
+    const newZoom = startZoom + (targetZoom - startZoom) * easeProgress;
+    state.lifeViewControls.zoomLevel = newZoom;
+    
+    // Update camera frustum for orthographic camera
+    const newFrustumSize = 10 / newZoom;
+    const aspect = window.innerWidth / window.innerHeight;
+    
+    camera.left = newFrustumSize * aspect / -2;
+    camera.right = newFrustumSize * aspect / 2;
+    camera.top = newFrustumSize / 2;
+    camera.bottom = newFrustumSize / -2;
+    camera.updateProjectionMatrix();
+    
+    // Update controls target
+    controls.target.x = centerX;
+    controls.target.y = centerY;
+    controls.target.z = 0;
+    
+    // Update pan offset
+    state.lifeViewControls.panOffset.x = -centerX;
+    state.lifeViewControls.panOffset.y = -centerY;
+    
+    if (progress < 1) {
+      requestAnimationFrame(animateZoomOut);
+    } else {
+      console.log('View entire grid complete');
+    }
+  }
+  
+  // Start animation
+  animateZoomOut();
+}
+
 // Initialize
-function init() {
+async function init() {
   // Show loading screen
   const loadingScreen = document.querySelector('.loading-screen')
   
-  // Create views
+  // Create life view first
   createLifeView()
-  createDayView()
+  
+  // Load day template and create day view
+  await loadDayTemplate()
+  
+  // Create HTML overlays after views are ready
   createHTMLOverlays()
   
   // Camera is now positioned by createLifeView
@@ -1103,6 +1303,27 @@ function init() {
   // Event listeners
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('click', onMouseClick)
+  
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (event) => {
+    // Toggle debug mode with 'd' key
+    if (event.key === 'd' || event.key === 'D') {
+      toggleDebugMode();
+    }
+    
+    // Transition to day view with 't' key
+    if (event.key === 't' || event.key === 'T') {
+      if (state.currentView === 'life' && !state.transitioning) {
+        console.log('Transitioning to day view via keyboard shortcut');
+        transitionToDay();
+      }
+    }
+    
+    // Zoom out to see entire grid with 'a' key
+    if (event.key === 'a' || event.key === 'A') {
+      viewEntireGrid();
+    }
+  });
   
   // Hide loading screen after a short delay
   setTimeout(() => {
