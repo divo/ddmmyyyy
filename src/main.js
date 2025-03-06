@@ -37,8 +37,18 @@ const state = {
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x000000)
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-camera.position.z = 5
+// Create orthographic camera instead of perspective
+const frustumSize = 10;
+const aspect = window.innerWidth / window.innerHeight;
+const camera = new THREE.OrthographicCamera(
+  frustumSize * aspect / -2, // left
+  frustumSize * aspect / 2,  // right
+  frustumSize / 2,           // top
+  frustumSize / -2,          // bottom
+  0.1,                       // near
+  1000                       // far
+);
+camera.position.z = 5;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
@@ -84,12 +94,13 @@ function createLifeView() {
   
   // Calculate base unit size for both blocks and spacing
   const baseUnit = 0.05; // Base unit for both block size and spacing
-  const blockSize = baseUnit; // Square blocks
-  const spacing = baseUnit; // Spacing equal to block size
+  const blockSize = baseUnit; // Cube size
+  const horizontalSpacing = baseUnit * 3; // Horizontal spacing 3x the cube width
+  const verticalSpacing = baseUnit * 3; // Vertical spacing 3x the cube width
   
   // Calculate grid dimensions
-  const totalUnitWidth = daysPerRow * (blockSize + spacing) - spacing;
-  const totalUnitHeight = rows * (blockSize + spacing) - spacing;
+  const totalUnitWidth = daysPerRow * (blockSize + horizontalSpacing) - horizontalSpacing;
+  const totalUnitHeight = rows * (blockSize + verticalSpacing) - verticalSpacing;
   
   console.log(`Grid dimensions: ${totalUnitWidth} x ${totalUnitHeight} units`);
   
@@ -109,13 +120,9 @@ function createLifeView() {
   // Calculate the current day index in our grid
   const currentDayIndex = currentYear * daysPerRow + currentDayOfYear;
   
-  console.log(`Current date: ${today.toDateString()}`);
-  console.log(`Day of year: ${currentDayOfYear + 1} (${currentDayOfYear} 0-indexed)`);
-  console.log(`Current year: ${currentYear} (row), Current day: ${currentDayOfYear} (column)`);
-  
   // Calculate the position of the current day for camera targeting
-  const currentDayXPos = currentDayOfYear * (blockSize + spacing) - totalUnitWidth / 2 + blockSize / 2;
-  const currentDayYPos = -currentYear * (blockSize + spacing) + totalUnitHeight / 2 - blockSize / 2;
+  const currentDayXPos = currentDayOfYear * (blockSize + horizontalSpacing) - totalUnitWidth / 2 + blockSize / 2;
+  const currentDayYPos = -currentYear * (blockSize + verticalSpacing) + totalUnitHeight / 2 - blockSize / 2;
   
   // Store current day position for camera initialization
   state.currentDayPosition = {
@@ -123,50 +130,58 @@ function createLifeView() {
     y: currentDayYPos
   };
   
-  // Create grid of squares
+  console.log(`Current date: ${today.toDateString()}`);
+  console.log(`Day of year: ${currentDayOfYear + 1} (${currentDayOfYear} 0-indexed)`);
+  console.log(`Current year: ${currentYear} (row), Current day: ${currentDayOfYear} (column)`);
+  
+  // Create grid of cubes
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < daysPerRow; col++) {
       const dayIndex = row * daysPerRow + col;
       
-      // Calculate position with spacing
-      const xPos = col * (blockSize + spacing) - totalUnitWidth / 2 + blockSize / 2;
-      const yPos = -row * (blockSize + spacing) + totalUnitHeight / 2 - blockSize / 2;
+      // Calculate position with different horizontal and vertical spacing
+      const xPos = col * (blockSize + horizontalSpacing) - totalUnitWidth / 2 + blockSize / 2;
+      const yPos = -row * (blockSize + verticalSpacing) + totalUnitHeight / 2 - blockSize / 2;
       
-      let square; // Will hold the created square
+      let cube; // Will hold the created cube
 
       if (dayIndex < currentDayIndex) {
-        // Past day - filled white
-        const geometry = new THREE.PlaneGeometry(blockSize, blockSize);
+        // Past day - pure white solid cube
+        const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+        
+        // Use MeshBasicMaterial for pure white color without lighting effects
         const material = new THREE.MeshBasicMaterial({ 
-          color: 0xffffff, 
-          side: THREE.DoubleSide 
+          color: 0xffffff // Pure white
         });
         
-        square = new THREE.Mesh(geometry, material);
-        square.position.set(xPos, yPos, 0);
+        cube = new THREE.Mesh(geometry, material);
+        cube.position.set(xPos, yPos, blockSize / 2); // Position with z up from the plane
         
         // Add metadata
-        square.userData = {
+        cube.userData = {
           dayIndex,
           row,
           col,
           isCurrent: false
         };
         
-        lifeViewGroup.add(square);
+        lifeViewGroup.add(cube);
       } else if (dayIndex === currentDayIndex) {
-        // Current day - blue
-        const geometry = new THREE.PlaneGeometry(blockSize, blockSize);
-        const material = new THREE.MeshBasicMaterial({ 
-          color: 0x4a90e2, 
-          side: THREE.DoubleSide 
+        // Current day - blue cube with point light
+        const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+        const material = new THREE.MeshStandardMaterial({ 
+          color: 0x4a90e2,
+          emissive: 0x2a5082,
+          emissiveIntensity: 0.5,
+          metalness: 0.5,
+          roughness: 0.3
         });
         
-        square = new THREE.Mesh(geometry, material);
-        square.position.set(xPos, yPos, 0);
+        cube = new THREE.Mesh(geometry, material);
+        cube.position.set(xPos, yPos, blockSize / 2); // Position with z up from the plane
         
         // Add metadata
-        square.userData = {
+        cube.userData = {
           dayIndex,
           row,
           col,
@@ -177,37 +192,61 @@ function createLifeView() {
           }
         };
         
-        lifeViewGroup.add(square);
+        lifeViewGroup.add(cube);
         
-        console.log(`Current day square position: row ${row}, column ${col}, x: ${xPos}, y: ${yPos}`);
-      } else {
-        // Future day - just white outline
-        const outlineGeometry = new THREE.EdgesGeometry(
-          new THREE.PlaneGeometry(blockSize, blockSize)
-        );
-        const material = new THREE.LineBasicMaterial({ 
-          color: 0xffffff, 
+        // Enhanced point light at current day - positioned behind cube with high intensity
+        const pointLight = new THREE.PointLight(0x4a90e2, 25, blockSize * 100);
+        pointLight.position.set(xPos, yPos, -blockSize); // Position behind the cube
+        pointLight.userData = {
+          pulsePhase: 0
+        };
+        lifeViewGroup.add(pointLight);
+        
+        // Store reference to current day cube and light for animation
+        lifeViewGroup.userData.currentDayCube = cube;
+        lifeViewGroup.userData.currentDayLight = pointLight;
+        
+        console.log(`Current day cube position: row ${row}, column ${col}, x: ${xPos}, y: ${yPos}`);
+        
+        // Add enhanced glowing sphere to represent the light source
+        const glowGeometry = new THREE.SphereGeometry(blockSize * 0.3, 16, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({ 
+          color: 0x4a90e2,
           transparent: true,
-          opacity: 0.5
+          opacity: 0.8
+        });
+        const glowSphere = new THREE.Mesh(glowGeometry, glowMaterial);
+        glowSphere.position.copy(pointLight.position);
+        lifeViewGroup.add(glowSphere);
+      } else {
+        // Future day - pure white edge cube
+        const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+        
+        // Create edges geometry with pure white lines
+        const edges = new THREE.EdgesGeometry(geometry);
+        const material = new THREE.LineBasicMaterial({ 
+          color: 0xffffff, // Pure white
+          transparent: false, // No transparency
+          opacity: 1.0 // Full opacity
         });
         
-        square = new THREE.LineSegments(outlineGeometry, material);
-        square.position.set(xPos, yPos, 0);
+        cube = new THREE.LineSegments(edges, material);
+        cube.position.set(xPos, yPos, blockSize / 2); // Position with z up from the plane
         
         // Add metadata
-        square.userData = {
+        cube.userData = {
           dayIndex,
           row,
           col,
           isCurrent: false
         };
         
-        lifeViewGroup.add(square);
+        lifeViewGroup.add(cube);
       }
       
       // If debug mode is on, add row/column labels
       if (state.debugMode && (row % 5 === 0 || col % 30 === 0 || dayIndex === currentDayIndex)) {
-        addDebugLabel(square, `${row},${col}`);
+        addDebugLabel(cube, `${row},${col}`);
       }
     }
   }
@@ -227,7 +266,7 @@ function positionCameraAboveCurrentDay() {
   camera.position.set(
     state.currentDayPosition.x,
     state.currentDayPosition.y,
-    5 // Maintain current zoom level
+    5 // Height doesn't affect orthographic view scale
   );
   
   // Set controls target to current day position
@@ -273,20 +312,27 @@ function setupLifeViewControls() {
   renderer.domElement.addEventListener('mouseleave', onLifeViewPanEnd);
 }
 
-// Zoom handler for life view
+// Zoom handler for life view with orthographic camera
 function onLifeViewZoom(event) {
   if (state.currentView !== 'life' || state.transitioning) return;
   
   event.preventDefault();
   
   // Calculate zoom delta - scale based on wheel movement
-  const zoomDelta = event.deltaY * -0.001;
+  const zoomDelta = event.deltaY * 0.001;
   
   // Apply zoom limits
   state.lifeViewControls.zoomLevel = Math.max(0.5, Math.min(5, state.lifeViewControls.zoomLevel + zoomDelta));
   
-  // Update camera position for zoom
-  camera.position.z = 5 / state.lifeViewControls.zoomLevel;
+  // Update orthographic camera zoom
+  const newFrustumSize = 10 / state.lifeViewControls.zoomLevel;
+  const aspect = window.innerWidth / window.innerHeight;
+  
+  camera.left = newFrustumSize * aspect / -2;
+  camera.right = newFrustumSize * aspect / 2;
+  camera.top = newFrustumSize / 2;
+  camera.bottom = newFrustumSize / -2;
+  camera.updateProjectionMatrix();
   
   console.log(`Zoom level: ${state.lifeViewControls.zoomLevel}`);
 }
@@ -573,16 +619,16 @@ function transitionToDay() {
   state.transitioning = true;
   controls.enabled = false;
   
-  // Find the current day square for zoom target
-  let currentDaySquare;
+  // Find the current day cube for zoom target
+  let currentDayCube;
   lifeViewGroup.children.forEach(child => {
     if (child.userData.isCurrent) {
-      currentDaySquare = child;
+      currentDayCube = child;
     }
   });
   
-  if (!currentDaySquare) {
-    console.error("No current day square found");
+  if (!currentDayCube) {
+    console.error("No current day cube found");
     return;
   }
   
@@ -661,16 +707,16 @@ function transitionToLife() {
   state.transitioning = true;
   controls.enabled = false;
   
-  // Find the current day square for zoom target
-  let currentDaySquare;
+  // Find the current day cube for zoom target
+  let currentDayCube;
   lifeViewGroup.children.forEach(child => {
     if (child.userData.isCurrent) {
-      currentDaySquare = child;
+      currentDayCube = child;
     }
   });
   
-  if (!currentDaySquare) {
-    console.error("No current day square found");
+  if (!currentDayCube) {
+    console.error("No current day cube found");
     return;
   }
   
@@ -890,29 +936,61 @@ function onMouseClick(event) {
   }
 }
 
-// Window resize handler
+// Window resize handler - updated for orthographic camera
 function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight
-  camera.updateProjectionMatrix()
-  renderer.setSize(window.innerWidth, window.innerHeight)
+  const aspect = window.innerWidth / window.innerHeight;
+  
+  if (camera.isOrthographicCamera) {
+    // For orthographic camera
+    const frustumSize = 10 / state.lifeViewControls.zoomLevel;
+    camera.left = frustumSize * aspect / -2;
+    camera.right = frustumSize * aspect / 2;
+    camera.top = frustumSize / 2;
+    camera.bottom = frustumSize / -2;
+    camera.updateProjectionMatrix();
+  } else {
+    // For perspective camera (day view)
+    camera.aspect = aspect;
+    camera.updateProjectionMatrix();
+  }
+  
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 // Animation loop
 function animate() {
-  requestAnimationFrame(animate)
+  requestAnimationFrame(animate);
   
   // Only enable controls in day view
-  controls.enabled = (state.currentView === 'day' && !state.transitioning)
+  controls.enabled = (state.currentView === 'day' && !state.transitioning);
   
   // Update controls only if enabled
   if (controls.enabled) {
-    controls.update()
+    controls.update();
+  }
+  
+  // Animate current day point light if in life view
+  if (state.currentView === 'life' && lifeViewGroup.userData.currentDayLight) {
+    const light = lifeViewGroup.userData.currentDayLight;
+    
+    // Update pulse phase
+    light.userData.pulsePhase = (light.userData.pulsePhase + 0.02) % (Math.PI * 2);
+    
+    // Calculate intensity factor (between 0.5 and 1.5)
+    const intensityFactor = 1 + 0.5 * Math.sin(light.userData.pulsePhase);
+    
+    // Apply intensity
+    light.intensity = 2 * intensityFactor;
+    
+    // Optionally change color slightly
+    const hue = 0.6 + 0.05 * Math.sin(light.userData.pulsePhase); // Blue hue with slight variation
+    light.color.setHSL(hue, 0.8, 0.5);
   }
   
   // Update time indicator in day view
   if (state.currentView === 'day' && dayViewGroup.visible) {
-    updateTimeIndicator()
-    updateLabels()
+    updateTimeIndicator();
+    updateLabels();
   }
   
   // Update debug label positions if debug mode is on
@@ -921,12 +999,12 @@ function animate() {
   }
   
   // Render scene
-  renderer.render(scene, camera)
+  renderer.render(scene, camera);
 }
 
 // Function to add debug labels showing row,column coordinates
-function addDebugLabel(square, text) {
-  const position = square.position.clone();
+function addDebugLabel(cube, text) {
+  const position = cube.position.clone();
   
   // Create HTML label
   const label = document.createElement('div');
