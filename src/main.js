@@ -645,7 +645,6 @@ function parseDayTemplate(template) {
 
 // Helper function: Convert time string to hour number
 function getHourFromTimeString(timeStr) {
-  console.log(timeStr);
   const [hours, minutes] = timeStr.split(':').map(Number)
   return hours + minutes / 60
 }
@@ -844,11 +843,31 @@ function createHTMLOverlays() {
   });
   document.body.appendChild(backButton);
   
-  // Create current time display
-  const timeDisplay = document.createElement('div');
-  timeDisplay.className = 'time-display';
-  timeDisplay.style.display = 'none';
-  document.body.appendChild(timeDisplay);
+  // Create analog clock container
+  const clockContainer = document.createElement('div');
+  clockContainer.className = 'analog-clock';
+  clockContainer.style.display = 'none';
+  document.body.appendChild(clockContainer);
+  
+  // Create analog clock face
+  const clockFace = document.createElement('div');
+  clockFace.className = 'clock-face';
+  clockContainer.appendChild(clockFace);
+  
+  // Create minute arc fill
+  const minuteArc = document.createElement('div');
+  minuteArc.className = 'minute-arc';
+  clockFace.appendChild(minuteArc);
+  
+  // Create hour hand
+  const hourHand = document.createElement('div');
+  hourHand.className = 'hour-hand';
+  clockFace.appendChild(hourHand);
+  
+  // Create center dot
+  const centerDot = document.createElement('div');
+  centerDot.className = 'center-dot';
+  clockFace.appendChild(centerDot);
   
   // Create description panel for day view
   const descriptionPanel = document.createElement('div');
@@ -859,21 +878,40 @@ function createHTMLOverlays() {
   // Store references
   state.htmlOverlays = {
     backButton,
-    timeDisplay,
+    clockContainer,
+    hourHand,
+    minuteArc,
     descriptionPanel
   };
 }
 
-// Update HTML overlay labels
+// Update HTML overlay labels and clock
 function updateLabels() {
   if (!state.htmlOverlays) return;
   
-  const { backButton, timeDisplay, descriptionPanel } = state.htmlOverlays;
+  const { backButton, clockContainer, hourHand, minuteArc, descriptionPanel } = state.htmlOverlays;
   
   if (state.currentView === 'day') {
-    // Show back button in day view
+    // Show back button and clock in day view
     backButton.style.display = 'block';
-    timeDisplay.style.display = 'block';
+    clockContainer.style.display = 'block';
+    
+    // Update analog clock
+    const now = new Date();
+    const hours = now.getHours() % 12 || 12; // Convert to 12-hour format
+    const minutes = now.getMinutes();
+    
+    // Calculate hour hand rotation (30 degrees per hour + partial rotation based on minutes)
+    const hourDegrees = (hours * 30) + (minutes / 2); // 30 degrees per hour, 0.5 degrees per minute
+    hourHand.style.transform = `rotate(${hourDegrees}deg)`;
+    
+    // Update the fill arc - represent minutes as a portion of the circle
+    // Create a blue filled arc that covers the appropriate portion of the circle
+    const minutePercentage = minutes / 60;
+    const arcEndDegree = 360 * minutePercentage;
+    
+    // Create the blue fill using conic-gradient
+    minuteArc.style.background = `conic-gradient(#4a90e2 0deg ${arcEndDegree}deg, transparent ${arcEndDegree}deg 360deg)`;
     
     // Get or create the labels container for block title and time labels
     let labelsContainer = document.getElementById('labels-container');
@@ -892,12 +930,6 @@ function updateLabels() {
       // Clear existing text labels but keep the container
       labelsContainer.innerHTML = '';
     }
-    
-    // Update current time display
-    const now = new Date();
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    timeDisplay.textContent = `${hours}:${minutes}`;
     
     // Calculate current hour for finding the relevant block
     const currentHour = now.getHours() + now.getMinutes() / 60;
@@ -988,7 +1020,7 @@ function updateLabels() {
   } else {
     // Hide elements in life view
     backButton.style.display = 'none';
-    timeDisplay.style.display = 'none';
+    clockContainer.style.display = 'none';
     descriptionPanel.style.display = 'none';
     
     // Hide labels container if it exists

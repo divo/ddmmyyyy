@@ -193,16 +193,7 @@ button:active {
 
 /* Current time display */
 .time-display {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background-color: rgba(0, 0, 0, 0.7);
-  color: white;
-  border-radius: 5px;
-  padding: 8px 16px;
-  font-size: 24px;
-  font-family: 'Inter', sans-serif;
-  z-index: 100;
+  display: none;
 }
 
 /* Debug labels */
@@ -213,4 +204,64 @@ button:active {
   border-radius: 2px;
   font-size: 10px;
   pointer-events: none;
+}
+
+/* Analog clock styles */
+.analog-clock {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 180px;
+  height: 180px;
+  z-index: 100;
+}
+
+.clock-face {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+}
+
+.hour-hand {
+  position: absolute;
+  width: 4px;
+  height: 50px;
+  background-color: white;
+  bottom: 50%;
+  left: 50%;
+  transform-origin: bottom center;
+  border-radius: 2px;
+  z-index: 3;
+  margin-left: -2px;
+}
+
+.minute-arc {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  transform-origin: center;
+  z-index: 1;
+  clip-path: circle(50% at center);
+}
+
+.center-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: white;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+}
+
+.hour-marker {
+  display: none;
 }
