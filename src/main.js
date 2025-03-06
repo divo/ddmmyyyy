@@ -171,9 +171,11 @@ function createLifeView() {
         // Past day - pure white solid cube
         const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
         
-        // Use MeshBasicMaterial for pure white color without lighting effects
-        const material = new THREE.MeshBasicMaterial({ 
-          color: 0xffffff // Pure white
+        // Use MeshStandardMaterial instead of MeshBasicMaterial to respond to lighting
+        const material = new THREE.MeshStandardMaterial({ 
+          color: 0xffffff, // Pure white
+          metalness: 0.1,
+          roughness: 0.8
         });
         
         cube = new THREE.Mesh(geometry, material);
@@ -216,13 +218,18 @@ function createLifeView() {
         
         lifeViewGroup.add(cube);
         
-        // Enhanced point light at current day - positioned behind cube with high intensity
-        const pointLight = new THREE.PointLight(0x4a90e2, 25, blockSize * 100);
-        pointLight.position.set(xPos, yPos, -blockSize); // Position behind the cube
+        // Enhanced point light at current day - position above the cube with higher intensity
+        const pointLight = new THREE.PointLight(0x4a90e2, 100, blockSize * 200);
+        pointLight.position.set(xPos, yPos, blockSize * 5); // Position well above the cube
         pointLight.userData = {
           pulsePhase: 0
         };
         lifeViewGroup.add(pointLight);
+        
+        // Add a second light for additional effect
+        const secondLight = new THREE.PointLight(0xffffff, 50, blockSize * 100);
+        secondLight.position.set(xPos, yPos, blockSize);
+        lifeViewGroup.add(secondLight);
         
         // Store reference to current day cube and light for animation
         lifeViewGroup.userData.currentDayCube = cube;
@@ -231,11 +238,11 @@ function createLifeView() {
         console.log(`Current day cube position: row ${row}, column ${col}, x: ${xPos}, y: ${yPos}`);
         
         // Add enhanced glowing sphere to represent the light source
-        const glowGeometry = new THREE.SphereGeometry(blockSize * 0.3, 16, 16);
+        const glowGeometry = new THREE.SphereGeometry(blockSize * 0.5, 16, 16);
         const glowMaterial = new THREE.MeshBasicMaterial({ 
           color: 0x4a90e2,
           transparent: true,
-          opacity: 0.8
+          opacity: 0.9
         });
         const glowSphere = new THREE.Mesh(glowGeometry, glowMaterial);
         glowSphere.position.copy(pointLight.position);
@@ -248,8 +255,8 @@ function createLifeView() {
         const edges = new THREE.EdgesGeometry(geometry);
         const material = new THREE.LineBasicMaterial({ 
           color: 0xffffff, // Pure white
-          transparent: false, // No transparency
-          opacity: 1.0 // Full opacity
+          transparent: true, // Enable transparency
+          opacity: 0.3 // Set opacity to 0.74 as requested
         });
         
         cube = new THREE.LineSegments(edges, material);
@@ -1198,7 +1205,7 @@ function viewEntireGrid() {
   
   console.log('Zooming out to view entire grid');
   
-  // Calculate appropriate zoom level to see entire grid
+  // Calculate actual grid dimensions for proper centering
   const baseUnit = 0.05;
   const blockSize = baseUnit;
   const horizontalSpacing = baseUnit * 3;
@@ -1207,30 +1214,20 @@ function viewEntireGrid() {
   const daysPerRow = 365;
   const rows = 90; // years
   
-  const totalUnitWidth = daysPerRow * (blockSize + horizontalSpacing) - horizontalSpacing;
-  const totalUnitHeight = rows * (blockSize + verticalSpacing) - verticalSpacing;
+  // Calculate total grid dimensions
+  const totalWidth = daysPerRow * (blockSize + horizontalSpacing);
+  const totalHeight = rows * (blockSize + verticalSpacing);
   
-  // Position camera at the center of the grid
+  // Calculate the actual center of the grid
+  // Center X is 0 since the grid is centered horizontally
+  // Center Y is -totalHeight/2 + rows showing above center * row height
+  const rowsToShowAboveCenter = 35; // Show about 35 years above center (adjust as needed)
   const centerX = 0;
-  const centerY = -totalUnitHeight / 4; // Shift up a bit to focus more on earlier years
-  const centerZ = 5;
+  const centerY = -totalHeight/2 + rowsToShowAboveCenter * (blockSize + verticalSpacing);
   
-  // Calculate zoom level to fit entire grid (with some padding)
-  const padding = 1.1; // 10% padding
-  const aspect = window.innerWidth / window.innerHeight;
-  
-  // Calculate zoom based on width and height
-  let targetZoom;
-  if (aspect >= 1) {
-    // For landscape orientation, fit height with padding
-    targetZoom = 0.5 * (totalUnitHeight * padding) / 10;
-  } else {
-    // For portrait orientation, fit width with padding
-    targetZoom = 0.5 * (totalUnitWidth * padding) / (10 * aspect);
-  }
-  
-  // Clamp to reasonable values
-  targetZoom = Math.max(0.1, Math.min(targetZoom, 5));
+  // Use a moderate zoom level that shows a good portion of the grid
+  // but still allows further zooming without issues
+  const targetZoom = 0.33; // More moderate zoom
   
   // Create animation for smooth transition
   const startPos = camera.position.clone();
@@ -1275,7 +1272,7 @@ function viewEntireGrid() {
     if (progress < 1) {
       requestAnimationFrame(animateZoomOut);
     } else {
-      console.log('View entire grid complete');
+      console.log('View entire grid complete - zoom level: ' + targetZoom);
     }
   }
   
