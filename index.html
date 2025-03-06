@@ -4,10 +4,89 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite App</title>
+    <title>ddmmyyyy - Time Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      #debug-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 12px;
+        z-index: 9999;
+        max-height: 200px;
+        overflow-y: auto;
+        display: none;
+      }
+      
+      #debug-toggle {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <!-- Three.js canvas will be appended here -->
+    </div>
+    
+    <!-- Loading screen -->
+    <div class="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="app-logo">ddmmyyyy</div>
+      <div class="app-description">Visualize your life and manage your time</div>
+    </div>
+    
+    <!-- Debug panel -->
+    <div id="debug-panel"></div>
+    <button id="debug-toggle">Debug</button>
+    
     <script type="module" src="/src/main.js"></script>
+    <script>
+      // Debug panel functionality
+      const debugPanel = document.getElementById('debug-panel');
+      const debugToggle = document.getElementById('debug-toggle');
+      
+      debugToggle.addEventListener('click', () => {
+        if (debugPanel.style.display === 'block') {
+          debugPanel.style.display = 'none';
+        } else {
+          debugPanel.style.display = 'block';
+        }
+      });
+      
+      // Override console.log to also output to debug panel
+      const originalConsoleLog = console.log;
+      console.log = function() {
+        const args = Array.from(arguments);
+        originalConsoleLog.apply(console, args);
+        
+        const message = args.map(arg => 
+          typeof arg === 'object' ? JSON.stringify(arg) : arg
+        ).join(' ');
+        
+        const logLine = document.createElement('div');
+        logLine.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        debugPanel.appendChild(logLine);
+        debugPanel.scrollTop = debugPanel.scrollHeight;
+      };
+      
+      // Also capture errors
+      window.addEventListener('error', (event) => {
+        console.log(`ERROR: ${event.message} at ${event.filename}:${event.lineno}`);
+      });
+    </script>
   </body>
 </html>
