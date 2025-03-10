@@ -4,7 +4,7 @@ A Three.js-powered time management application that visualizes your life and dai
 
 ## Features
 
-- **Life View**: A grid visualization of your entire life, with each square representing one day
+- **Life View**: A grid visualization of your entire life, with each square representing one week
 - **Day View**: A detailed timeline of your daily schedule with color-coded blocks
 - **Smooth Transitions**: Seamless zooming between Life and Day views
 - **Real-time Updates**: The current time indicator updates in real-time
@@ -41,12 +41,12 @@ npm run dev
 
 ### Life View
 
-The Life View displays a grid of squares, each representing one day of your life:
-- White squares: Past days
-- Blue square: Current day
-- Light gray squares: Future days
+The Life View displays a grid of squares, each representing one week of your life:
+- White squares: Past weeks
+- Blue square: Current week
+- Light gray squares: Future weeks
 
-Click on the current day (blue square) to zoom into the Day View.
+Click on the current week (blue square) to zoom into the Day View.
 
 ### Day View
 
