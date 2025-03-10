@@ -111,55 +111,56 @@ function createLifeView() {
   clearDebugLabels();
 
   const yearsToShow = 90; // Show 90 years of life
-  const daysPerRow = 365; // Days per row (one year per row, ignoring leap years)
+  const weeksPerRow = 52; // Weeks per row (one year per row)
   const rows = yearsToShow;
   
   // Calculate base unit size for both blocks and spacing
   const baseUnit = 0.05; // Base unit for both block size and spacing
-  const blockSize = baseUnit; // Cube size
-  const horizontalSpacing = baseUnit * 3; // Horizontal spacing 3x the cube width
-  const verticalSpacing = baseUnit * 3; // Vertical spacing 3x the cube width
+  const blockSize = baseUnit * 2; // Cube size - made larger since we have fewer dots per row
+  const horizontalSpacing = baseUnit * 2; // Horizontal spacing between weeks
+  const verticalSpacing = baseUnit * 3; // Vertical spacing between years
   
   // Calculate grid dimensions
-  const totalUnitWidth = daysPerRow * (blockSize + horizontalSpacing) - horizontalSpacing;
+  const totalUnitWidth = weeksPerRow * (blockSize + horizontalSpacing) - horizontalSpacing;
   const totalUnitHeight = rows * (blockSize + verticalSpacing) - verticalSpacing;
   
   console.log(`Grid dimensions: ${totalUnitWidth} x ${totalUnitHeight} units`);
   
-  // Calculate the current day's position in the grid
+  // Calculate the current week's position in the grid
   const today = new Date(state.currentDay);
   
-  // Calculate the day of year (0-indexed)
+  // Calculate the week of year (0-indexed)
   const startOfYear = new Date(today.getFullYear(), 0, 0);
   const diff = today - startOfYear;
   const oneDay = 1000 * 60 * 60 * 24;
-  const currentDayOfYear = Math.floor(diff / oneDay); // Already 0-indexed, no need for -1 adjustment
+  const currentDayOfYear = Math.floor(diff / oneDay);
+  const currentWeekOfYear = Math.floor(currentDayOfYear / 7); // Convert day to week
   
   // Calculate years since birth (assuming 35 years old, so current year is in row 35)
   const currentAge = 35;
   const currentYear = currentAge;
   
-  // Calculate the current day index in our grid
-  const currentDayIndex = currentYear * daysPerRow + currentDayOfYear;
+  // Calculate the current week index in our grid
+  const currentWeekIndex = currentYear * weeksPerRow + currentWeekOfYear;
   
-  // Calculate the position of the current day for camera targeting
-  const currentDayXPos = currentDayOfYear * (blockSize + horizontalSpacing) - totalUnitWidth / 2 + blockSize / 2;
-  const currentDayYPos = -currentYear * (blockSize + verticalSpacing) + totalUnitHeight / 2 - blockSize / 2;
+  // Calculate the position of the current week for camera targeting
+  const currentWeekXPos = currentWeekOfYear * (blockSize + horizontalSpacing) - totalUnitWidth / 2 + blockSize / 2;
+  const currentWeekYPos = -currentYear * (blockSize + verticalSpacing) + totalUnitHeight / 2 - blockSize / 2;
   
   // Store current day position for camera initialization
   state.currentDayPosition = {
-    x: currentDayXPos,
-    y: currentDayYPos
+    x: currentWeekXPos,
+    y: currentWeekYPos
   };
   
   console.log(`Current date: ${today.toDateString()}`);
-  console.log(`Day of year: ${currentDayOfYear + 1} (${currentDayOfYear} 0-indexed)`);
-  console.log(`Current year: ${currentYear} (row), Current day: ${currentDayOfYear} (column)`);
+  console.log(`Week of year: ${currentWeekOfYear + 1} (${currentWeekOfYear} 0-indexed)`);
+  console.log(`Current year: ${currentYear} (row), Current week: ${currentWeekOfYear} (column)`);
   
   // Create grid of cubes
   for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < daysPerRow; col++) {
-      const dayIndex = row * daysPerRow + col;
+    for (let col = 0; col < weeksPerRow; col++) {
+      const weekIndex = row * weeksPerRow + col;
       
       // Calculate position with different horizontal and vertical spacing
       const xPos = col * (blockSize + horizontalSpacing) - totalUnitWidth / 2 + blockSize / 2;
@@ -167,8 +168,8 @@ function createLifeView() {
       
       let cube; // Will hold the created cube
 
-      if (dayIndex < currentDayIndex) {
-        // Past day - pure white solid cube
+      if (weekIndex < currentWeekIndex) {
+        // Past week - pure white solid cube
         const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
         
         // Use MeshStandardMaterial instead of MeshBasicMaterial to respond to lighting
@@ -183,15 +184,15 @@ function createLifeView() {
         
         // Add metadata
         cube.userData = {
-          dayIndex,
+          weekIndex,
           row,
           col,
           isCurrent: false
         };
         
         lifeViewGroup.add(cube);
-      } else if (dayIndex === currentDayIndex) {
-        // Current day - blue cube with point light
+      } else if (weekIndex === currentWeekIndex) {
+        // Current week - blue cube with point light
         const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
         const material = new THREE.MeshStandardMaterial({ 
           color: 0x4a90e2,
@@ -206,7 +207,7 @@ function createLifeView() {
         
         // Add metadata
         cube.userData = {
-          dayIndex,
+          weekIndex,
           row,
           col,
           isCurrent: true,
@@ -248,7 +249,7 @@ function createLifeView() {
         glowSphere.position.copy(pointLight.position);
         lifeViewGroup.add(glowSphere);
       } else {
-        // Future day - pure white edge cube
+        // Future week - pure white edge cube
         const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
         
         // Create edges geometry with pure white lines
@@ -264,7 +265,7 @@ function createLifeView() {
         
         // Add metadata
         cube.userData = {
-          dayIndex,
+          weekIndex,
           row,
           col,
           isCurrent: false
@@ -274,7 +275,7 @@ function createLifeView() {
       }
       
       // If debug mode is on, add row/column labels
-      if (state.debugMode && (row % 5 === 0 || col % 30 === 0 || dayIndex === currentDayIndex)) {
+      if (state.debugMode && (row % 5 === 0 || col % 30 === 0 || weekIndex === currentWeekIndex)) {
         addDebugLabel(cube, `${row},${col}`);
       }
     }
@@ -1329,15 +1330,15 @@ function viewEntireGrid() {
   
   // Calculate actual grid dimensions for proper centering
   const baseUnit = 0.05;
-  const blockSize = baseUnit;
-  const horizontalSpacing = baseUnit * 3;
+  const blockSize = baseUnit * 2; // Larger blocks for weeks
+  const horizontalSpacing = baseUnit * 2; // Horizontal spacing between weeks
   const verticalSpacing = baseUnit * 3;
   
-  const daysPerRow = 365;
+  const weeksPerRow = 52; // 52 weeks per year
   const rows = 90; // years
   
   // Calculate total grid dimensions
-  const totalWidth = daysPerRow * (blockSize + horizontalSpacing);
+  const totalWidth = weeksPerRow * (blockSize + horizontalSpacing);
   const totalHeight = rows * (blockSize + verticalSpacing);
   
   // Calculate the actual center of the grid
@@ -1349,7 +1350,7 @@ function viewEntireGrid() {
   
   // Use a moderate zoom level that shows a good portion of the grid
   // but still allows further zooming without issues
-  const targetZoom = 0.33; // More moderate zoom
+  const targetZoom = 0.40; // More moderate zoom
   
   // Create animation for smooth transition
   const startPos = camera.position.clone();
