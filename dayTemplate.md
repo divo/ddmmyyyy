@@ -31,8 +31,12 @@ Do a final push to wrap up the morning’s work. This might be a good time to fi
 12:00 - 13:00
 Take a real break for lunch. Your brain and body need this pause. Step away from work completely. Eat a nutritious lunch that will energize your afternoon: for example, grilled fish or chicken (protein) with brown rice/quinoa (complex carb) and a salad or steamed veggies (fiber and nutrients). This balances blood sugar and avoids an afternoon crash ￼. Incorporate some movement here as well. You could do your planned run or a strength training session now if it fits (e.g. a 30-minute workout at 12:30, then a quick shower and 30 minutes to eat). Exercise at lunchtime can boost your mood and re-energize you for the second half of the day ￼. If a full workout isn’t feasible, even a 10-minute walk outside after eating can help digestion and give you a mental reset. The key is to return to work feeling refreshed.
 
+# Admin tasks
+13:00 - 13:30
+After lunch spend 30 mins to clear out some admin tasks. Follow up with people, apply for a job, organize your todo list. If there is nothing else to do there is always email to sort and manage.
+
 # Early afternoon work block
-13:00 - 15:00
+13:30 - 15:00
 Ease back into work with a slightly lighter task if you experience a post-lunch dip. Early afternoon is a common low-energy time as the body’s circadian rhythm fluctuates. To counter this, expose yourself to bright light (if indoors, turn on lights or sit by a window) and consider a small caffeine boost if needed. If you’re still feeling alert, you might not need more coffee yet; but if you feel sluggish, a cup of green tea or a half-cup of coffee around 2 PM can help maintain focus without disrupting your night sleep (make sure not to have caffeine much later than this) ￼. During this block, focus on tasks that are engaging to you – for example, coding a part of the project you find interesting or handling easier programming chores (writing tests, documentation, responding to code reviews). This can help you get back into flow. Use the “bite-sized task” approach to spark motivation: break your work into smaller chunks and tick them off one by one ￼. Each small win will give you a dopamine boost and keep you rolling through the afternoon.
 
 # Energizing break
