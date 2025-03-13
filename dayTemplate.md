@@ -9,6 +9,8 @@ Start the day on the right foot. Upon waking, drink water and get moving with a 
 This is prime time for most people’s focus – capitalize on it. Tackle your most mentally demanding or high-priority programming tasks first while your mind is fresh. Minimize distractions: close email, put your phone on do-not-disturb, and consider using a site blocker to prevent rabbit-holes with your “broad range of interests” during focus time. Work in a quiet environment or use noise-cancelling headphones if needed. You have caffeine on board (your first cup of coffee now), and after a good night’s rest, you can achieve a lot in these two hours.
 - High priority task
 - Do not disturb is on
+- Plan out your day if you failed too last night
+- Plan tasks for the evening; A project you are excitied about, a book to read and a backup activity if energy is low
 
 # Short break
 09:00 - 9:10
@@ -54,14 +56,19 @@ Take a long break for dinner. Just like lunch, completely detach from work durin
 # Evening work block (Wrap up)
 19:00 - 21:00
 Finish the workday strong, but also smart. Use this time to tie up loose ends: commit and push code changes, write down progress notes, and create tomorrow’s to-do list if you haven’t already. Resume work with lighter tasks or creative work that you enjoy. Acknowledge that energy and focus may not be as high as in the morning, so plan tasks accordingly. This is a great time for tasks that require creativity or strategic thinking in a relaxed way – some people actually get a second creative peak in the evening when the pressure of the day is off. The key is to stay engaged: if you feel boredom or monotony, switch to a different task or take a 5-minute break to reset. Continue using a cycle of focused work and short breaks (e.g. 45 minutes on, 5 minutes off) to keep your mind from fatiguing. Also, be mindful of your posture now – hours of sitting can take a toll. You might try working standing up for a bit or doing some chair stretches. Small actions like rolling your shoulders, twisting your torso, or stretching your neck can maintain physical comfort and focus.
+- Plan tomorrow
+- Lighter tasks
+- At least plan what is the main thing todo tomorrow, and something to do in the evening
 
 # Short break
 21:00 - 21:10
 By this time, avoid any caffeine if you were considering an evening pick-me-up. You’ve likely had your last coffee by mid-afternoon; consuming caffeine now will interfere with your ability to fall asleep on time ￼. Instead, if you need a perk-up, do some quick movement – e.g. 20 jumping jacks or make yourself a cup of herbal tea (peppermint can be refreshing, chamomile if you’re looking to start calming down). Take 5–10 minutes to step away from work. This could be a good time to lightly plan tomorrow: jot down any pressing tasks or ideas in a notepad so you won’t worry about forgetting them overnight. Clearing your “mental RAM” in this way can reduce stress and also set you up for an organized tomorrow.
 
+
 # Personal study
 21:10 - 23:00
 Be cautious about pushing yourself to do extremely complex problem-solving when you’re exhausted – mistakes and diminishing returns can creep in late at night. This can also be a time for learning/reading if your brain is too tired to produce but can still absorb. For instance, read an article or document related to your field that you’ve been meaning to, or watch a tech talk in the background. Mentally, this block should be about closure. Remind yourself that you’ve put in a massive effort today – far more than most – and every minute you work now is securing that “outworking everyone” goal. That said, monitor your fatigue: if you notice you’re making errors or just spinning wheels, it’s okay to call it a day a bit early. Pushing through when your brain is truly fried can lead to low-quality work and frustration ￼. It might be more effective to get extra sleep and start fresh in the morning. Discipline is key, but so is self-awareness.
+- If you are tired, end the day here and read a book
 
 # Shutdown and Sleep Routine
 23:00 - 00:00 
