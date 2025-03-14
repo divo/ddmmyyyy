@@ -8,7 +8,9 @@ const state = {
   transitioning: false,
   currentDay: new Date(),
   debugMode: false, // Debug flag for displaying grid coordinates
-  dayTemplate: '' // Will be loaded from external file
+  dayTemplate: '', // Will be loaded from external file
+  previousMinute: -1,
+  previousPomodoroMinute: -1
 }
 
 // Setup
@@ -937,7 +939,7 @@ function createHTMLOverlays() {
   clockFace.className = 'clock-face';
   clockContainer.appendChild(clockFace);
   
-  // Create minute arc fill
+  // Create minute arc fill (first layer)
   const minuteArc = document.createElement('div');
   minuteArc.className = 'minute-arc';
   clockFace.appendChild(minuteArc);
@@ -947,10 +949,35 @@ function createHTMLOverlays() {
   hourHand.className = 'hour-hand';
   clockFace.appendChild(hourHand);
   
-  // Create center dot
+  // Create pomodoro arc fill (must be after minute arc and hour hand in DOM)
+  const pomodoroArc = document.createElement('div');
+  pomodoroArc.className = 'pomodoro-arc';
+  pomodoroArc.style.display = 'none'; // Hidden by default
+  clockFace.appendChild(pomodoroArc);
+  
+  // Create center dot (always on top)
   const centerDot = document.createElement('div');
   centerDot.className = 'center-dot';
   clockFace.appendChild(centerDot);
+  
+  // Create Pomodoro timer container
+  const pomodoroContainer = document.createElement('div');
+  pomodoroContainer.className = 'pomodoro-container';
+  pomodoroContainer.style.display = 'none';
+  document.body.appendChild(pomodoroContainer);
+  
+  // Create Pomodoro timer display
+  const pomodoroDisplay = document.createElement('div');
+  pomodoroDisplay.className = 'pomodoro-display';
+  pomodoroDisplay.textContent = '45';
+  pomodoroContainer.appendChild(pomodoroDisplay);
+  
+  // Create Pomodoro start button
+  const pomodoroButton = document.createElement('button');
+  pomodoroButton.textContent = 'Start Pomodoro';
+  pomodoroButton.className = 'pomodoro-button';
+  pomodoroButton.addEventListener('click', startPomodoro);
+  pomodoroContainer.appendChild(pomodoroButton);
   
   // Create description panel for day view
   const descriptionPanel = document.createElement('div');
@@ -964,37 +991,178 @@ function createHTMLOverlays() {
     clockContainer,
     hourHand,
     minuteArc,
-    descriptionPanel
+    pomodoroArc,
+    descriptionPanel,
+    pomodoroContainer,
+    pomodoroDisplay,
+    pomodoroButton
   };
+  
+  // Initialize pomodoro state
+  state.pomodoro = {
+    running: false,
+    timeRemaining: 45 * 60 * 1000, // 45 minutes in milliseconds
+    startTime: null,
+    timerId: null,
+    endTime: null // Store the end time for the indicator
+  };
+}
+
+// Start Pomodoro timer
+function startPomodoro() {
+  const { pomodoroButton, pomodoroDisplay, pomodoroArc } = state.htmlOverlays;
+  
+  // If already running, stop the timer
+  if (state.pomodoro.running) {
+    stopPomodoro();
+    return;
+  }
+  
+  // Set up timer state
+  state.pomodoro.running = true;
+  state.pomodoro.startTime = Date.now();
+  state.pomodoro.timeRemaining = 45 * 60 * 1000; // 45 minutes in milliseconds
+  state.pomodoro.endTime = Date.now() + state.pomodoro.timeRemaining; // Calculate end time
+  
+  // Update button text
+  pomodoroButton.textContent = 'Stop Pomodoro';
+  
+  // Show the pomodoro arc
+  pomodoroArc.style.display = 'block';
+  
+  // Start timer updates - no longer using setInterval, will update in animation loop
+  updatePomodoro();
+}
+
+// Stop Pomodoro timer
+function stopPomodoro() {
+  const { pomodoroButton, pomodoroDisplay, pomodoroArc } = state.htmlOverlays;
+  
+  // Clear timer - no longer needed since we're using animation loop
+  // clearInterval(state.pomodoro.timerId);
+  
+  // Reset state
+  state.pomodoro.running = false;
+  state.pomodoro.timeRemaining = 45 * 60 * 1000;
+  
+  // Hide the pomodoro arc and clear its background
+  pomodoroArc.style.display = 'none';
+  pomodoroArc.style.background = '';
+  
+  // Update UI
+  pomodoroButton.textContent = 'Start Pomodoro';
+  pomodoroDisplay.textContent = '45';
+}
+
+// Update Pomodoro timer display
+function updatePomodoro() {
+  if (!state.pomodoro.running) return;
+  
+  const { pomodoroDisplay } = state.htmlOverlays;
+  
+  // Calculate remaining time
+  const elapsed = Date.now() - state.pomodoro.startTime;
+  const remaining = state.pomodoro.timeRemaining - elapsed;
+  
+  if (remaining <= 0) {
+    // Timer completed
+    pomodoroDisplay.textContent = '0';
+    stopPomodoro();
+    alert('Pomodoro timer completed!');
+    return;
+  }
+  
+  // Display remaining minutes (rounded up to nearest minute)
+  const minutesRemaining = Math.ceil(remaining / (60 * 1000));
+  pomodoroDisplay.textContent = minutesRemaining.toString();
+}
+
+// Update the pomodoro arc on the clock
+function updatePomodoroArc() {
+  if (!state.pomodoro.running) return;
+  
+  const { pomodoroArc } = state.htmlOverlays;
+  
+  const now = new Date();
+  
+  // Get current minutes for minute hand position (6 degrees per minute)
+  const minutes = now.getMinutes();
+  const startAngle = minutes * 6; // 6 degrees per minute for minute hand
+  
+  // Calculate the remaining time in the pomodoro timer
+  const elapsed = (now - new Date(state.pomodoro.startTime)) / (60 * 1000); // Elapsed time in minutes
+  const totalDuration = 45; // 45 minutes for pomodoro
+  const remaining = Math.max(0, totalDuration - elapsed);
+  
+  // Convert remaining time to degrees (6 degrees per minute)
+  const durationDegrees = remaining * 6;
+  const endAngle = startAngle + durationDegrees;
+  
+  // Normalize angles to 0-360 range
+  const normalizedStartAngle = startAngle % 360;
+  const normalizedEndAngle = endAngle % 360;
+  
+  // Handle the case where end angle wraps around
+  let gradientString;
+  if (endAngle <= 360 || normalizedEndAngle > normalizedStartAngle) {
+    // Normal case: start to end (no wrap-around)
+    gradientString = `conic-gradient(
+      transparent 0deg ${normalizedStartAngle}deg, 
+      rgba(255, 0, 0, 0.95) ${normalizedStartAngle}deg ${normalizedEndAngle > 360 ? 360 : normalizedEndAngle}deg, 
+      transparent ${normalizedEndAngle > 360 ? 360 : normalizedEndAngle}deg 360deg
+    )`;
+  } else {
+    // Wrap-around case: start to 360, then 0 to end
+    gradientString = `conic-gradient(
+      rgba(255, 0, 0, 0.95) 0deg ${normalizedEndAngle}deg, 
+      transparent ${normalizedEndAngle}deg ${normalizedStartAngle}deg, 
+      rgba(255, 0, 0, 0.95) ${normalizedStartAngle}deg 360deg
+    )`;
+  }
+  
+  pomodoroArc.style.background = gradientString;
 }
 
 // Update HTML overlay labels and clock
 function updateLabels() {
   if (!state.htmlOverlays) return;
   
-  const { backButton, clockContainer, hourHand, minuteArc, descriptionPanel } = state.htmlOverlays;
+  const { backButton, clockContainer, hourHand, minuteArc, descriptionPanel, pomodoroContainer, pomodoroArc } = state.htmlOverlays;
   
   if (state.currentView === 'day') {
     // Show back button and clock in day view
     backButton.style.display = 'block';
     clockContainer.style.display = 'block';
+    pomodoroContainer.style.display = 'block';
     
     // Update analog clock
     const now = new Date();
     const hours = now.getHours() % 12 || 12; // Convert to 12-hour format
     const minutes = now.getMinutes();
     
-    // Calculate hour hand rotation (30 degrees per hour + partial rotation based on minutes)
-    const hourDegrees = (hours * 30) + (minutes / 2); // 30 degrees per hour, 0.5 degrees per minute
-    hourHand.style.transform = `rotate(${hourDegrees}deg)`;
+    // Only update minute arc when the minute changes
+    if (minutes !== state.previousMinute) {
+      state.previousMinute = minutes;
+      
+      // Calculate hour hand rotation (30 degrees per hour + partial rotation based on minutes)
+      const hourDegrees = (hours * 30) + (minutes / 2); // 30 degrees per hour, 0.5 degrees per minute
+      hourHand.style.transform = `rotate(${hourDegrees}deg)`;
+
+      // Update minute arc - using 6 degrees per minute (360° ÷ 60 = 6°)
+      const minuteDegrees = minutes * 6; // 6 degrees per minute
+      minuteArc.style.background = `conic-gradient(#4a90e2 0deg ${minuteDegrees}deg, transparent ${minuteDegrees}deg 360deg)`;
+    }
     
-    // Update the fill arc - represent minutes as a portion of the circle
-    // Create a blue filled arc that covers the appropriate portion of the circle
-    const minutePercentage = minutes / 60;
-    const arcEndDegree = 360 * minutePercentage;
-    
-    // Create the blue fill using conic-gradient
-    minuteArc.style.background = `conic-gradient(#4a90e2 0deg ${arcEndDegree}deg, transparent ${arcEndDegree}deg 360deg)`;
+    // Then handle the pomodoro arc if timer is running
+    if (state.pomodoro && state.pomodoro.running) {
+      // Remove and re-append the pomodoro arc to ensure it's always on top
+      const clockFace = pomodoroArc.parentNode;
+      if (clockFace) {
+        clockFace.removeChild(pomodoroArc);
+        clockFace.appendChild(pomodoroArc);
+      }
+      updatePomodoroArc();
+    }
     
     // Get or create the labels container for block title and time labels
     let labelsContainer = document.getElementById('labels-container');
@@ -1111,7 +1279,13 @@ function updateLabels() {
     // Hide elements in life view
     backButton.style.display = 'none';
     clockContainer.style.display = 'none';
+    pomodoroContainer.style.display = 'none';
     descriptionPanel.style.display = 'none';
+    
+    // Stop pomodoro timer if running
+    if (state.pomodoro && state.pomodoro.running) {
+      stopPomodoro();
+    }
     
     // Hide labels container if it exists
     const labelsContainer = document.getElementById('labels-container');
@@ -1225,6 +1399,19 @@ function animate() {
   // Update time indicator in day view
   if (state.currentView === 'day' && dayViewGroup.visible) {
     updateTimeIndicator();
+    
+    // Update pomodoro timer if running
+    if (state.pomodoro.running) {
+      updatePomodoro();
+      
+      // Only update the pomodoro arc when the minute changes
+      const currentMinute = new Date().getMinutes();
+      if (currentMinute !== state.previousPomodoroMinute) {
+        state.previousPomodoroMinute = currentMinute;
+        updatePomodoroArc();
+      }
+    }
+    
     updateLabels();
   }
   
